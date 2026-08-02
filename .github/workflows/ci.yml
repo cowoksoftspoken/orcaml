@@ -33,7 +33,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install maturin pytest numpy scikit-learn wgpu
+          pip install maturin pytest numpy scikit-learn wgpu onnx safetensors
       - name: Build and Install Crate
         run: pip install .
       - name: Run Pytest
