@@ -12,7 +12,7 @@ binary: every item must be met before the phase is considered complete.
 | **Status** | Living document |
 | **Owner** | Core team |
 | **Created** | 2026-07-03 |
-| **Last updated** | 2026-07-03 |
+| **Last updated** | 2026-08-02 |
 | **Review cadence** | Every phase boundary |
 
 > [!IMPORTANT]
@@ -86,6 +86,10 @@ Orca follows [Semantic Versioning 2.0.0](https://semver.org/). Pre-1.0 releases
 (`0.x.y`) carry **no API stability guarantee**. Starting at v1.0.0, all public APIs
 are covered by semver: breaking changes require a major version bump.
 
+This roadmap is the target sequence. The current workspace may already contain
+precursor implementations for later phases, but the ordering and phase gates
+below are the canonical plan.
+
 | Version range | Stability | Audience |
 |---|---|---|
 | `0.1.x – 0.3.x` | Experimental | Core contributors only |
@@ -113,7 +117,7 @@ of simple arithmetic expressions.
 |---|---|---|---|
 | 0.1 | Cargo workspace | `orca` (root) | Workspace manifest with all member crates, unified dependency versions, feature flags |
 | 0.2 | Python package scaffold | `orca-python` | `pyproject.toml`, maturin build, `import orca` works |
-| 0.3 | Core type system | `orca-core` | `DType` enum (`f32`, `f64`, `bf16`, `f16`, `i32`, `i64`, `bool`), `Shape`, `Device` enum (`Cpu`, `Cuda(ordinal)`), `Strides` |
+| 0.3 | Core type system | `orca-core` | `DType` enum (`f32`, `f64`, `bf16`, `f16`, `i32`, `i64`, `bool`), `Shape`, `Device` enum (`Cpu`, `Cuda(ordinal)`, `Gpu(ordinal)`), `Strides` |
 | 0.4 | Error hierarchy | `orca-core` | `OrcaError` with variants: `ShapeMismatch`, `DTypeMismatch`, `DeviceMismatch`, `OutOfMemory`, `InvalidArgument`, `BackendError` |
 | 0.5 | CPU tensor | `orca-tensor` | Dense, contiguous, row-major tensor backed by `Vec<T>`. Supports `f32` and `f64` at minimum |
 | 0.6 | Basic arithmetic | `orca-tensor` | Element-wise `add`, `sub`, `mul`, `div` with broadcasting; `matmul` for 2-D tensors |
@@ -277,11 +281,11 @@ yet, but must be within 3× for core operations.
 
 | # | Deliverable | Crate | Description |
 |---|---|---|---|
-| 3.1 | CUDA backend scaffold | `orca-backend-cuda` | Device enumeration, context management, stream handling |
-| 3.2 | GPU memory pool | `orca-backend-cuda` | Caching allocator with configurable pool size, OOM handling |
-| 3.3 | Core CUDA kernels | `orca-backend-cuda` | Element-wise ops, reduction ops, broadcasting |
-| 3.4 | cuBLAS integration | `orca-backend-cuda` | `matmul`, `gemm`, `batched_gemm` via cuBLAS |
-| 3.5 | cuDNN integration | `orca-backend-cuda` | Conv2d forward + backward, BatchNorm forward + backward |
+| 3.1 | GPU backend scaffold | `orca-backend-gpu` | Device enumeration, context management, stream handling |
+| 3.2 | GPU memory pool | `orca-backend-gpu` | Caching allocator with configurable pool size, OOM handling |
+| 3.3 | Core GPU kernels | `orca-backend-gpu` | Element-wise ops, reduction ops, broadcasting |
+| 3.4 | Matrix-math integration | `orca-backend-gpu` | `matmul`, `gemm`, `batched_gemm` via the active GPU compute stack |
+| 3.5 | Fused GPU ops | `orca-backend-gpu` | Conv2d forward + backward, BatchNorm forward + backward |
 | 3.6 | CPU↔GPU transfer | `orca-tensor` | `.to(device)`, `.cpu()`, `.cuda()`, automatic transfer on ops |
 | 3.7 | GPU autograd | `orca-autograd` | Tape records device info; backward pass runs on correct device |
 
@@ -389,7 +393,7 @@ comprehensive. The API is stable.
 
 | # | Deliverable | Crate | Description |
 |---|---|---|---|
-| 5.1 | Data-parallel training | `orca-distributed` | `DataParallel` wrapper; NCCL-based all-reduce |
+| 5.1 | Data-parallel training | `orca-distributed` | `DataParallel` wrapper; TCP-based all-reduce baseline with room for transport upgrades |
 | 5.2 | Computation graph | `orca-graph` | Capture forward pass as a static graph for optimization |
 | 5.3 | Operator fusion | `orca-graph` | Fuse element-wise chains, fuse bias+activation |
 | 5.4 | Gradient checkpointing | `orca-autograd` | Trade compute for memory on long sequences |

@@ -27,5 +27,5 @@ target-version = "py310"
 minversion = "7.0"
 addopts = "-ra -q"
 testpaths = [
-    "tests",
+    "python/tests",
 ]

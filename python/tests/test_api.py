@@ -67,6 +67,13 @@ def test_shape_mismatch_exception():
     with pytest.raises(ValueError):
         _ = a + b
 
+def test_dtype_mismatch_exception():
+    """Verify that backend dtype mismatches raise a ValueError."""
+    a = orca.Tensor.zeros([1, 2], dtype=orca.DType.FLOAT32)
+    b = orca.Tensor.zeros([1, 2], dtype=orca.DType.FLOAT16)
+    with pytest.raises(ValueError):
+        _ = a + b
+
 def test_linear_layer(simple_model):
     """Test linear forward pass with a shared model fixture."""
     x = orca.Tensor.ones([1, 2])
@@ -113,6 +120,78 @@ def test_optimizers(simple_model, optimizer_class):
     # Verify weights actually updated
     updated_weights = params[0].tensor.to_list()
     assert init_weights != updated_weights
+
+
+def test_optimizer_rejects_invalid_parameter_lists():
+    """Verify optimizers fail fast on empty or non-Parameter inputs."""
+    with pytest.raises(ValueError):
+        optim.SGD([])
+
+    with pytest.raises(TypeError):
+        optim.SGD([orca.Tensor.ones([1])])
+
+
+@pytest.mark.parametrize("optimizer_class", [optim.Adam, optim.AdamW])
+def test_adam_family_state_matches_parameter_dtype(optimizer_class):
+    """Verify Adam-family state tensors preserve the parameter dtype."""
+    parameter = nn.Parameter(
+        orca.Tensor.ones([2], dtype=orca.DType.FLOAT16, requires_grad=True)
+    )
+
+    optimizer = optimizer_class([parameter])
+
+    assert optimizer.m[0].dtype == parameter.tensor.dtype
+    assert optimizer.v[0].dtype == parameter.tensor.dtype
+
+
+@pytest.mark.parametrize("optimizer_class", [optim.Adam, optim.AdamW])
+def test_adam_family_no_grad_step_keeps_step_counter(optimizer_class):
+    """Verify Adam-family step counters only advance when a gradient is applied."""
+    parameter = nn.Parameter(orca.Tensor.ones([1], requires_grad=True))
+    optimizer = optimizer_class([parameter])
+
+    optimizer.step()
+
+    assert optimizer.t == 0
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        lambda parameter: optim.SGD([parameter], lr=-0.1),
+        lambda parameter: optim.SGD([parameter], momentum=-0.1),
+        lambda parameter: optim.SGD([parameter], dampening=1.1),
+        lambda parameter: optim.Adam([parameter], betas=(0.9, 1.0)),
+        lambda parameter: optim.Adam([parameter], eps=0.0),
+        lambda parameter: optim.AdamW([parameter], weight_decay=-0.1),
+    ],
+)
+def test_optimizers_reject_invalid_hyperparameters(factory):
+    """Verify optimizer hyperparameter errors are explicit."""
+    parameter = nn.Parameter(orca.Tensor.ones([1], requires_grad=True))
+
+    with pytest.raises((TypeError, ValueError)):
+        factory(parameter)
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        lambda optimizer: optim.StepLR(optimizer, step_size=0),
+        lambda optimizer: optim.StepLR(optimizer, step_size=1, gamma=-0.1),
+        lambda optimizer: optim.CosineAnnealingLR(optimizer, T_max=0),
+        lambda optimizer: optim.CosineAnnealingLR(optimizer, T_max=1, eta_min=-0.1),
+        lambda optimizer: optim.LinearWarmup(optimizer, warmup_epochs=0),
+    ],
+)
+def test_lr_schedulers_reject_invalid_hyperparameters(factory):
+    """Verify scheduler hyperparameter errors are explicit."""
+    parameter = nn.Parameter(orca.Tensor.ones([1], requires_grad=True))
+    optimizer = optim.SGD([parameter])
+
+    with pytest.raises((TypeError, ValueError)):
+        factory(optimizer)
+
 
 def test_numerical_gradients():
     """Check analytical autograd correctness using numerical finite differences."""
@@ -368,7 +447,6 @@ def test_high_level_dataset_wrappers(tmp_path):
     X_batch, Y_batch = batches[0]
     assert X_batch.shape == [2, 2]
     assert Y_batch.shape == [2, 3]
-
 
 
 

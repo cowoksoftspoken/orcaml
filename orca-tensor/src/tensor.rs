@@ -36,16 +36,16 @@ impl<B: Backend> Tensor<B> {
     }
 
     /// Creates a new tensor filled with ones.
-    pub fn ones(backend: B, shape: impl Into<Shape>, _dtype: DType) -> Result<Self> {
+    pub fn ones(backend: B, shape: impl Into<Shape>, dtype: DType) -> Result<Self> {
         let shape = shape.into();
         let data = vec![1.0; shape.num_elements()];
-        Self::from_f32_slice(backend, &data, shape)
+        Self::from_f32_slice(backend, &data, shape)?.to_dtype(dtype)
     }
 
     /// Creates a 0-dimensional (scalar) tensor with a specific value.
-    pub fn scalar(backend: B, value: f32, _dtype: DType) -> Result<Self> {
+    pub fn scalar(backend: B, value: f32, dtype: DType) -> Result<Self> {
         let shape = Shape::new(vec![1]);
-        Self::from_f32_slice(backend, &[value], shape)
+        Self::from_f32_slice(backend, &[value], shape)?.to_dtype(dtype)
     }
 
     /// Creates a new tensor filled with random uniform values between low and high.
@@ -54,7 +54,7 @@ impl<B: Backend> Tensor<B> {
         shape: impl Into<Shape>,
         low: f32,
         high: f32,
-        _dtype: DType,
+        dtype: DType,
     ) -> Result<Self> {
         use rand::Rng;
         let shape = shape.into();
@@ -66,7 +66,7 @@ impl<B: Backend> Tensor<B> {
             data.push(rng.gen_range(low..high));
         }
 
-        Self::from_f32_slice(backend, &data, shape.clone())
+        Self::from_f32_slice(backend, &data, shape)?.to_dtype(dtype)
     }
 
     /// Creates a new tensor filled with random normal values.
@@ -75,7 +75,7 @@ impl<B: Backend> Tensor<B> {
         shape: impl Into<Shape>,
         mean: f32,
         std: f32,
-        _dtype: DType,
+        dtype: DType,
     ) -> Result<Self> {
         use rand_distr::{Distribution, Normal};
         let shape = shape.into();
@@ -93,7 +93,7 @@ impl<B: Backend> Tensor<B> {
             data.push(normal.sample(&mut rng));
         }
 
-        Self::from_f32_slice(backend, &data, shape.clone())
+        Self::from_f32_slice(backend, &data, shape)?.to_dtype(dtype)
     }
 
     /// Creates a dropout mask tensor scaled by 1/(1-p).
@@ -101,7 +101,7 @@ impl<B: Backend> Tensor<B> {
         backend: B,
         shape: impl Into<Shape>,
         p: f32,
-        _dtype: DType,
+        dtype: DType,
     ) -> Result<Self> {
         use rand::Rng;
         let shape = shape.into();
@@ -116,7 +116,7 @@ impl<B: Backend> Tensor<B> {
             data.push(val);
         }
 
-        Self::from_f32_slice(backend, &data, shape.clone())
+        Self::from_f32_slice(backend, &data, shape)?.to_dtype(dtype)
     }
 
     /// Returns the shape of this tensor.
@@ -132,6 +132,23 @@ impl<B: Backend> Tensor<B> {
     /// Returns the data type of the tensor.
     pub fn dtype(&self) -> DType {
         self.dtype
+    }
+
+    /// Casts the tensor to a target data type.
+    pub fn to_dtype(&self, target_dtype: DType) -> Result<Self> {
+        if self.dtype == target_dtype {
+            return Ok(self.clone());
+        }
+        let storage = self
+            .backend
+            .cast(&self.storage, &self.shape, self.dtype, target_dtype)?;
+        Ok(Self {
+            storage,
+            shape: self.shape.clone(),
+            strides: self.strides.clone(),
+            dtype: target_dtype,
+            backend: self.backend.clone(),
+        })
     }
 
     /// Returns the device where this tensor is stored.
@@ -294,19 +311,16 @@ impl<B: Backend> Tensor<B> {
                 rhs.backend.device(),
             ));
         }
-        let target_dtype = self.dtype.promote(rhs.dtype);
-        let lhs_storage = if self.dtype != target_dtype {
-            self.backend
-                .cast(&self.storage, &self.shape, self.dtype, target_dtype)?
-        } else {
-            self.storage.clone()
-        };
-        let rhs_storage = if rhs.dtype != target_dtype {
-            rhs.backend
-                .cast(&rhs.storage, &rhs.shape, rhs.dtype, target_dtype)?
-        } else {
-            rhs.storage.clone()
-        };
+        if self.dtype != rhs.dtype {
+            return Err(OrcaError::DTypeMismatch {
+                op: "matmul",
+                expected: self.dtype,
+                got: rhs.dtype,
+            });
+        }
+        let lhs_storage = self.storage.clone();
+        let rhs_storage = rhs.storage.clone();
+        let target_dtype = self.dtype;
 
         let mut out_shape_vec = self.shape.to_vec();
         out_shape_vec[rank1 - 2] = self.shape[rank1 - 2];
@@ -659,19 +673,16 @@ impl<B: Backend> Div for &Tensor<B> {
                 rhs.backend.device(),
             ));
         }
-        let target_dtype = self.dtype.promote(rhs.dtype);
-        let lhs_storage = if self.dtype != target_dtype {
-            self.backend
-                .cast(&self.storage, &self.shape, self.dtype, target_dtype)?
-        } else {
-            self.storage.clone()
-        };
-        let rhs_storage = if rhs.dtype != target_dtype {
-            rhs.backend
-                .cast(&rhs.storage, &rhs.shape, rhs.dtype, target_dtype)?
-        } else {
-            rhs.storage.clone()
-        };
+        if self.dtype != rhs.dtype {
+            return Err(OrcaError::DTypeMismatch {
+                op: "div",
+                expected: self.dtype,
+                got: rhs.dtype,
+            });
+        }
+        let lhs_storage = self.storage.clone();
+        let rhs_storage = rhs.storage.clone();
+        let target_dtype = self.dtype;
 
         let storage = self
             .backend
@@ -704,19 +715,16 @@ impl<B: Backend> Add for &Tensor<B> {
                 rhs.backend.device(),
             ));
         }
-        let target_dtype = self.dtype.promote(rhs.dtype);
-        let lhs_storage = if self.dtype != target_dtype {
-            self.backend
-                .cast(&self.storage, &self.shape, self.dtype, target_dtype)?
-        } else {
-            self.storage.clone()
-        };
-        let rhs_storage = if rhs.dtype != target_dtype {
-            rhs.backend
-                .cast(&rhs.storage, &rhs.shape, rhs.dtype, target_dtype)?
-        } else {
-            rhs.storage.clone()
-        };
+        if self.dtype != rhs.dtype {
+            return Err(OrcaError::DTypeMismatch {
+                op: "add",
+                expected: self.dtype,
+                got: rhs.dtype,
+            });
+        }
+        let lhs_storage = self.storage.clone();
+        let rhs_storage = rhs.storage.clone();
+        let target_dtype = self.dtype;
 
         let storage = self
             .backend
@@ -749,19 +757,16 @@ impl<B: Backend> Sub for &Tensor<B> {
                 rhs.backend.device(),
             ));
         }
-        let target_dtype = self.dtype.promote(rhs.dtype);
-        let lhs_storage = if self.dtype != target_dtype {
-            self.backend
-                .cast(&self.storage, &self.shape, self.dtype, target_dtype)?
-        } else {
-            self.storage.clone()
-        };
-        let rhs_storage = if rhs.dtype != target_dtype {
-            rhs.backend
-                .cast(&rhs.storage, &rhs.shape, rhs.dtype, target_dtype)?
-        } else {
-            rhs.storage.clone()
-        };
+        if self.dtype != rhs.dtype {
+            return Err(OrcaError::DTypeMismatch {
+                op: "sub",
+                expected: self.dtype,
+                got: rhs.dtype,
+            });
+        }
+        let lhs_storage = self.storage.clone();
+        let rhs_storage = rhs.storage.clone();
+        let target_dtype = self.dtype;
 
         let storage = self
             .backend
@@ -794,19 +799,16 @@ impl<B: Backend> Mul for &Tensor<B> {
                 rhs.backend.device(),
             ));
         }
-        let target_dtype = self.dtype.promote(rhs.dtype);
-        let lhs_storage = if self.dtype != target_dtype {
-            self.backend
-                .cast(&self.storage, &self.shape, self.dtype, target_dtype)?
-        } else {
-            self.storage.clone()
-        };
-        let rhs_storage = if rhs.dtype != target_dtype {
-            rhs.backend
-                .cast(&rhs.storage, &rhs.shape, rhs.dtype, target_dtype)?
-        } else {
-            rhs.storage.clone()
-        };
+        if self.dtype != rhs.dtype {
+            return Err(OrcaError::DTypeMismatch {
+                op: "mul",
+                expected: self.dtype,
+                got: rhs.dtype,
+            });
+        }
+        let lhs_storage = self.storage.clone();
+        let rhs_storage = rhs.storage.clone();
+        let target_dtype = self.dtype;
 
         let storage = self
             .backend

@@ -6,6 +6,8 @@ This document defines the core architecture, memory model, and operational seman
 
 Orca follows a layered, progressive abstraction model. Users interact primarily with the Python API, which delegates to a fast Rust runtime, which in turn dispatches to hardware-specific backends.
 
+The diagram below shows the target layering model. The current workspace covers a subset of it; the next section separates implemented crates from planned ones.
+
 ```mermaid
 flowchart TD
     %% Python Layer
@@ -27,8 +29,8 @@ flowchart TD
     %% Rust Runtime Layer
     subgraph Rust Runtime ["Rust Runtime (orca-runtime)"]
         Autograd["orca-autograd (Tape-based Reverse AD)"]
-        NN["orca-nn (Modules, Parameters)"]
-        Ops["orca-ops (Operator Registry & Dispatch)"]
+        NN["orca-nn (planned)"]
+        Ops["orca-ops (planned)"]
         Core["orca-tensor & orca-core (Data Structures)"]
         
         Bridge --> NN
@@ -40,8 +42,8 @@ flowchart TD
 
     %% Backend Layer
     subgraph Backends ["Backend Layer (Traits)"]
-        CPU["orca-backend-cpu (Rayon/NdArray)"]
-        CUDA["orca-backend-cuda (cuBLAS/cuDNN)"]
+        CPU["orca-backend-cpu (current)"]
+        CUDA["orca-backend-gpu (current)"]
         Custom["Custom Backends..."]
         
         Core --> CPU
@@ -60,28 +62,26 @@ flowchart TD
 
 ## 2. Crate Architecture
 
-The `orca-runtime` workspace is divided into specific, tightly-scoped crates. **Circular dependencies are strictly forbidden.**
+The current workspace is split into the following crates. **Circular dependencies are strictly forbidden.**
 
 ```text
 orca-runtime/
-├── orca-core/         # Fundamental types and errors
-├── orca-tensor/       # Tensor storage and views
-├── orca-ops/          # Operation definitions and dispatch
-├── orca-autograd/     # Automatic differentiation engine
-├── orca-backend-cpu/  # CPU backend implementation
-├── orca-backend-cuda/ # CUDA backend implementation
-├── orca-nn/           # Neural network primitives
-├── orca-optim/        # Optimizers and schedulers
-├── orca-data/         # Data loading and transforms
-├── orca-serialize/    # SafeTensors integration
-└── orca-python/       # PyO3 bindings
+├── orca-core/          # Fundamental types and errors
+├── orca-tensor/        # Tensor storage and views
+├── orca-autograd/      # Automatic differentiation engine
+├── orca-backend-cpu/   # CPU backend implementation
+├── orca-backend-gpu/   # GPU backend implementation
+├── orca-distributed/   # TCP-based distributed collectives
+├── orca-serialize/     # Tensor serialization helpers
+└── orca-python/        # PyO3 bindings
 ```
+
+### Current Crates
 
 ### `orca-core`
 - **Purpose**: Defines the foundational vocabulary of the framework.
 - **Key Types**: `DType`, `Shape`, `Device`, `OrcaError`.
 - **Dependencies**: None.
-- **Anti-Responsibility**: Does not handle any memory allocation or operations.
 
 ### `orca-tensor`
 - **Purpose**: Defines the memory layout, strides, and storage semantics for multidimensional arrays.
@@ -91,23 +91,39 @@ orca-runtime/
 ### `orca-autograd`
 - **Purpose**: Tracks computations and computes gradients via reverse-mode AD.
 - **Key Types**: `Tape`, `Node`, `Variable`.
-- **Dependencies**: `orca-tensor`, `orca-ops`.
-
-### `orca-ops`
-- **Purpose**: Defines mathematical operations and their backward (gradient) rules.
-- **Key Types**: `Op`, `UnaryOp`, `BinaryOp`, `ReduceOp`.
 - **Dependencies**: `orca-tensor`.
-- **Anti-Responsibility**: Does not implement the hardware kernels, only the trait signatures and dispatch logic.
 
-### `orca-nn`
-- **Purpose**: High-level neural network components.
-- **Key Types**: `Module`, `Parameter`, `Linear`, `Conv2d`.
-- **Dependencies**: `orca-tensor`, `orca-autograd`.
+### `orca-backend-cpu`
+- **Purpose**: Executes tensor operations on the CPU.
+- **Key Types**: `CpuBackend`, `CpuByteStorage`.
+- **Dependencies**: `orca-core`, `orca-tensor`.
+
+### `orca-backend-gpu`
+- **Purpose**: Executes tensor operations on the GPU via `wgpu`.
+- **Key Types**: `GpuBackend`, `GpuStorage`.
+- **Dependencies**: `orca-core`, `orca-tensor`, `orca-backend-cpu`.
+
+### `orca-distributed`
+- **Purpose**: Provides TCP-based distributed collectives.
+- **Key Types**: `DistributedCommunicator`.
+- **Dependencies**: `orca-core`, `orca-tensor`.
+
+### `orca-serialize`
+- **Purpose**: Serializes and loads tensor collections.
+- **Key Types**: `save_tensors`, `load_tensors`.
+- **Dependencies**: `orca-core`, `orca-tensor`.
 
 ### `orca-python`
 - **Purpose**: Exposes the Rust runtime to Python via PyO3.
 - **Key Types**: `PyTensor`, `PyModule`.
-- **Dependencies**: All core crates.
+- **Dependencies**: `orca-core`, `orca-tensor`, `orca-autograd`, `orca-backend-cpu`, `orca-backend-gpu`, `orca-distributed`, `orca-serialize`.
+
+### Planned / RFC-Gated Crates
+
+- `orca-ops`: operator registry and dispatch layer.
+- `orca-nn`: high-level neural network components.
+- `orca-optim`: optimizers and schedulers.
+- `orca-data`: data loading and transforms.
 
 ---
 

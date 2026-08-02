@@ -60,11 +60,22 @@ class Linear(Module):
         else:
             x_flat = x
             
-        out = x_flat @ self.weight.tensor
+        from orca import autocast
+        if autocast.is_enabled():
+            target_dtype = autocast.current_dtype()
+            if x_flat.dtype != target_dtype:
+                x_flat = x_flat.to_dtype(target_dtype)
+            weight = self.weight.tensor.to_dtype(target_dtype)
+            bias = self.bias.tensor.to_dtype(target_dtype) if self.bias is not None else None
+        else:
+            weight = self.weight.tensor
+            bias = self.bias.tensor if self.bias is not None else None
+
+        out = x_flat @ weight
         
-        if self.bias is not None:
+        if bias is not None:
             # expand bias to match out shape and add
-            b = self.bias.tensor.expand(out.shape)
+            b = bias.expand(out.shape)
             out = out + b
             
         if rank > 2:

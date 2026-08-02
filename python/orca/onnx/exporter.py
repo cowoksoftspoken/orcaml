@@ -269,4 +269,3 @@ def export_onnx(model: nn.Module, dummy_input: orca.Tensor, filepath: str):
     if os.path.dirname(filepath):
         os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
     onnx.save(model_proto, filepath)
-    print(f"Successfully exported model to ONNX: {filepath}")

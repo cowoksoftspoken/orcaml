@@ -12,7 +12,7 @@ be caught in CI or code review.
 | **Status** | Living document |
 | **Audience** | AI assistants, developers using AI tools |
 | **Created** | 2026-07-03 |
-| **Last updated** | 2026-07-03 |
+| **Last updated** | 2026-08-02 |
 
 ---
 
@@ -85,22 +85,19 @@ These rules are **hard constraints**. No exceptions without an approved RFC.
 
 ### Crate Dependency Graph
 
-```
-orca-python
-    ├── orca-nn
-    │   ├── orca-autograd
-    │   │   └── orca-tensor
-    │   │       └── orca-core
-    │   └── orca-tensor
-    ├── orca-optim
-    │   ├── orca-nn
-    │   └── orca-tensor
-    ├── orca-data
-    │   └── orca-tensor
-    └── orca-serialize
-        ├── orca-nn
-        └── orca-tensor
-```
+The current Rust dependency layers are:
+
+- `orca-core` has no workspace dependencies.
+- `orca-tensor` depends on `orca-core`.
+- `orca-autograd` depends on `orca-core` and `orca-tensor`.
+- `orca-backend-cpu` depends on `orca-core` and `orca-tensor`.
+- `orca-backend-gpu` depends on `orca-core`, `orca-tensor`, and `orca-backend-cpu`.
+- `orca-distributed` depends on `orca-core` and `orca-tensor`.
+- `orca-serialize` depends on `orca-core` and `orca-tensor`.
+- `orca-python` depends on `orca-core`, `orca-tensor`, `orca-autograd`, `orca-backend-cpu`, `orca-backend-gpu`, `orca-distributed`, and `orca-serialize`.
+
+The Python package also contains higher-level modules under `python/orca/`
+(`nn`, `optim`, and `data`) that sit on top of the Rust bindings.
 
 **Rules:**
 
@@ -108,8 +105,9 @@ orca-python
    on A, directly or transitively.
 
 2. **Never add an upward dependency.** Lower crates (`orca-core`, `orca-tensor`) must
-   never depend on higher crates (`orca-nn`, `orca-python`). Information flows down
-   via traits, not up via concrete types.
+   never depend on higher layers (`orca-autograd`, `orca-backend-cpu`,
+   `orca-backend-gpu`, `orca-distributed`, `orca-serialize`, or `orca-python`).
+   Information flows down via traits, not up via concrete types.
 
 3. **Never make `orca-core` depend on anything outside `std`.** It is the foundation.
 
@@ -300,8 +298,10 @@ Use these established patterns. Do not invent new conventions.
 
 ### Crate Naming
 
-- All crates are prefixed with `orca-`: `orca-core`, `orca-tensor`, `orca-nn`.
-- Crate names use kebab-case: `orca-backend-cuda`, not `orca_backend_cuda`.
+- All Rust crates are prefixed with `orca-`: `orca-core`, `orca-tensor`,
+  `orca-autograd`, `orca-backend-cpu`, `orca-backend-gpu`, `orca-distributed`,
+  `orca-serialize`, and `orca-python`.
+- Crate names use kebab-case: `orca-backend-gpu`, not `orca_backend_gpu`.
 - Module names within crates use snake_case.
 
 ### Constant and Static Naming
@@ -461,7 +461,8 @@ When a change spans multiple files:
 
 1. **Plan first.** List all files that need to change and what changes each needs.
 2. **Start from the bottom of the dependency graph.** Change `orca-core` before
-   `orca-tensor`, `orca-tensor` before `orca-nn`.
+   `orca-tensor`, `orca-tensor` before `orca-autograd`, and the Rust bindings before
+   the Python layers they expose.
 3. **Compile after each file.** Don't accumulate changes across files without
    verifying compilation.
 4. **Write tests last.** Ensure the implementation compiles before writing tests.

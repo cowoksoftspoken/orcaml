@@ -1,0 +1,11 @@
+[package]
+name = "orca-distributed"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+orca-core = { path = "../orca-core" }
+orca-tensor = { path = "../orca-tensor" }
+thiserror = { workspace = true }

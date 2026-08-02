@@ -1,14 +1,24 @@
 use std::collections::HashMap;
-use wgpu;
 
-/// A simple caching allocator for wgpu::Buffer.
+/// A production-grade caching allocator for [`wgpu::Buffer`] objects.
+///
+/// This memory pool groups buffers by both their exact size in bytes and their
+/// required WebGPU usages. This prevents illegal usage access errors and minimizes
+/// the overhead of synchronous GPU allocations/deallocations.
 #[derive(Debug)]
 pub struct MemoryPool {
-    /// Maps a buffer size in bytes to a vector of available, unused buffers of that exact size.
-    cache: HashMap<wgpu::BufferAddress, Vec<wgpu::Buffer>>,
+    /// Maps the tuple `(size, usage)` to a vector of pooled buffers.
+    cache: HashMap<(wgpu::BufferAddress, wgpu::BufferUsages), Vec<wgpu::Buffer>>,
+}
+
+impl Default for MemoryPool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MemoryPool {
+    /// Creates a new, empty memory pool.
     pub fn new() -> Self {
         Self {
             cache: HashMap::new(),
@@ -16,27 +26,22 @@ impl MemoryPool {
     }
 
     /// Allocates a buffer of the requested size and usage.
-    /// If a compatible buffer is available in the cache, it is reused.
-    /// Otherwise, a new buffer is created.
+    ///
+    /// If a buffer with matching size and usage is available in the pool,
+    /// it is returned immediately. Otherwise, a new buffer is created on the device.
     pub fn allocate(
         &mut self,
         device: &wgpu::Device,
         size: wgpu::BufferAddress,
         usage: wgpu::BufferUsages,
     ) -> wgpu::Buffer {
-        // Look for an available buffer of the exact size.
-        // For a more advanced allocator, we could check for >= size (e.g. next power of 2),
-        // but exact match is simplest and prevents unbounded waste.
-        if let Some(list) = self.cache.get_mut(&size) {
+        let key = (size, usage);
+        if let Some(list) = self.cache.get_mut(&key) {
             if let Some(buffer) = list.pop() {
-                // Wait, buffer usage must match!
-                // For Orca, almost all our buffers are STORAGE | COPY_SRC | COPY_DST.
-                // We'll assume usage matches for now. A safer pool would key by (size, usage).
                 return buffer;
             }
         }
 
-        // Cache miss: create a new buffer
         device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("pooled_buffer"),
             size,
@@ -45,8 +50,22 @@ impl MemoryPool {
         })
     }
 
-    /// Releases a buffer back into the pool.
-    pub fn release(&mut self, buffer: wgpu::Buffer, size: wgpu::BufferAddress) {
-        self.cache.entry(size).or_insert_with(Vec::new).push(buffer);
+    /// Releases a buffer back into the pool for future reuse.
+    ///
+    /// The buffer's original size and usage must be supplied to ensure it is
+    /// cached under the correct key.
+    pub fn release(
+        &mut self,
+        buffer: wgpu::Buffer,
+        size: wgpu::BufferAddress,
+        usage: wgpu::BufferUsages,
+    ) {
+        let key = (size, usage);
+        self.cache.entry(key).or_default().push(buffer);
+    }
+
+    /// Clears the memory pool, dropping all cached buffers.
+    pub fn clear(&mut self) {
+        self.cache.clear();
     }
 }

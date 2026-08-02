@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments, clippy::wrong_self_convention)]
 use orca_core::{DType, Device, Result, Shape};
 use std::fmt::Debug;
 

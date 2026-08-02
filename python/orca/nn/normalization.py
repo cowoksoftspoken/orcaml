@@ -91,20 +91,15 @@ class BatchNorm2d(Module):
             var = sum_sq * (1.0 / num_elements)
             unbiased_var = sum_sq * (1.0 / unbiased_denom)
             
-            # Update running stats (momentum)
-            # Create disconnected tensors to prevent graph retention
-            mean_vals = mean.to_list()
-            var_vals = unbiased_var.to_list()
-            
-            new_running_mean = Tensor.from_list(mean_vals, reduced_shape, requires_grad=False, device=x.device)
-            new_running_var = Tensor.from_list(var_vals, reduced_shape, requires_grad=False, device=x.device)
-            
-            # Update self._buffers directly
+            # Update running stats (momentum) using zero-copy detach
             old_rm = self._buffers['running_mean']
             old_rv = self._buffers['running_var']
             
-            self._buffers['running_mean'] = (old_rm * (1.0 - self.momentum)) + (new_running_mean * self.momentum)
-            self._buffers['running_var'] = (old_rv * (1.0 - self.momentum)) + (new_running_var * self.momentum)
+            new_rm = (old_rm * (1.0 - self.momentum)) + (mean * self.momentum)
+            new_rv = (old_rv * (1.0 - self.momentum)) + (unbiased_var * self.momentum)
+            
+            self._buffers['running_mean'] = new_rm.detach()
+            self._buffers['running_var'] = new_rv.detach()
             
             # Normalize and apply affine
             eps_tensor = _scalar(self.eps, x.device).expand(reduced_shape)

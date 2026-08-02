@@ -1,8 +1,10 @@
 """Stochastic Gradient Descent optimizer with momentum and weight decay."""
-from typing import Iterable, Optional
+from typing import Iterable
+
 import orca
-from .optimizer import Optimizer
 from orca.nn.parameter import Parameter
+
+from .optimizer import Optimizer, _validate_non_negative_float
 
 
 class SGD(Optimizer):
@@ -32,47 +34,46 @@ class SGD(Optimizer):
         dampening: float = 0.0,
     ):
         super().__init__(parameters)
-        self.lr = lr
-        self.momentum = momentum
-        self.weight_decay = weight_decay
-        self.dampening = dampening
+        self.lr = _validate_non_negative_float("lr", lr)
+        self.momentum = _validate_non_negative_float("momentum", momentum)
+        self.weight_decay = _validate_non_negative_float("weight_decay", weight_decay)
+        self.dampening = _validate_non_negative_float("dampening", dampening)
+        if self.dampening > 1.0:
+            raise ValueError("dampening must be in the range [0, 1]")
 
-        # Velocity buffers (lazy-initialized on first step)
         self._velocity = [None] * len(self.parameters)
 
     def step(self) -> None:
         """Performs a single optimization step."""
-        for i, param in enumerate(self.parameters):
-            grad = param.tensor.grad()
-            if grad is None:
-                continue
+        with orca.no_grad():
+            for parameter_index, parameter in enumerate(self.parameters):
+                grad = parameter.tensor.grad()
+                if grad is None:
+                    continue
 
-            device = param.tensor.device
+                if self.weight_decay != 0.0:
+                    grad = grad + parameter.tensor * self.weight_decay
 
-            # L2 weight decay: d_p = grad + weight_decay * param
-            if self.weight_decay != 0.0:
-                grad = grad + param.tensor * self.weight_decay
-
-            # Momentum
-            if self.momentum != 0.0:
-                if self._velocity[i] is None:
-                    # First call — clone the gradient as initial velocity
-                    self._velocity[i] = grad.detach()
-                else:
-                    # v_t = momentum * v_{t-1} + (1 - dampening) * grad
-                    v_prev = self._velocity[i]
-                    if self.dampening != 0.0:
-                        self._velocity[i] = v_prev * self.momentum + grad * (1.0 - self.dampening)
+                if self.momentum != 0.0:
+                    if self._velocity[parameter_index] is None:
+                        self._velocity[parameter_index] = grad.detach()
                     else:
-                        self._velocity[i] = v_prev * self.momentum + grad
+                        previous_velocity = self._velocity[parameter_index]
+                        if self.dampening != 0.0:
+                            self._velocity[parameter_index] = (
+                                previous_velocity * self.momentum
+                                + grad * (1.0 - self.dampening)
+                            )
+                        else:
+                            self._velocity[parameter_index] = (
+                                previous_velocity * self.momentum + grad
+                            )
 
-                grad = self._velocity[i]
+                    grad = self._velocity[parameter_index]
 
-            # param = param - lr * grad
-            update = grad * self.lr
-            new_tensor = param.tensor - update
+                update = grad * self.lr
+                new_tensor = parameter.tensor - update
 
-            # Detach from graph and re-enable gradient tracking (zero-copy)
-            new_leaf = new_tensor.detach()
-            new_leaf.require_grad()
-            param.update(new_leaf)
+                new_leaf = new_tensor.detach()
+                new_leaf.require_grad()
+                parameter.update(new_leaf)

@@ -80,6 +80,13 @@ impl<B: Backend> Backend for Autodiff<B> {
     ) -> Result<Self::Storage> {
         let primal = self.inner.add(&lhs.primal, &rhs.primal, shape, dtype)?;
 
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
+
         let mut tape = self
             .tape
             .lock()
@@ -122,6 +129,13 @@ impl<B: Backend> Backend for Autodiff<B> {
             .inner
             .matmul(&lhs.primal, &rhs.primal, lhs_shape, rhs_shape, dtype)?;
 
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
+
         let mut tape = self
             .tape
             .lock()
@@ -162,6 +176,13 @@ impl<B: Backend> Backend for Autodiff<B> {
             .inner
             .transpose(&storage.primal, shape, dim0, dim1, dtype)?;
 
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
+
         let mut tape = self
             .tape
             .lock()
@@ -197,6 +218,13 @@ impl<B: Backend> Backend for Autodiff<B> {
         dtype: DType,
     ) -> Result<Self::Storage> {
         let primal = self.inner.sub(&lhs.primal, &rhs.primal, shape, dtype)?;
+
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
 
         let mut tape = self
             .tape
@@ -235,6 +263,13 @@ impl<B: Backend> Backend for Autodiff<B> {
             .inner
             .mul_scalar(&storage.primal, scalar, shape, dtype)?;
 
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
+
         let mut tape = self
             .tape
             .lock()
@@ -269,6 +304,13 @@ impl<B: Backend> Backend for Autodiff<B> {
         dtype: DType,
     ) -> Result<Self::Storage> {
         let primal = self.inner.mul(&lhs.primal, &rhs.primal, shape, dtype)?;
+
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
 
         let mut tape = self
             .tape
@@ -307,6 +349,13 @@ impl<B: Backend> Backend for Autodiff<B> {
     ) -> Result<Self::Storage> {
         let primal = self.inner.div(&lhs.primal, &rhs.primal, shape, dtype)?;
 
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
+
         let mut tape = self
             .tape
             .lock()
@@ -338,6 +387,13 @@ impl<B: Backend> Backend for Autodiff<B> {
     fn relu(&self, storage: &Self::Storage, shape: &Shape, dtype: DType) -> Result<Self::Storage> {
         let primal = self.inner.relu(&storage.primal, shape, dtype)?;
 
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
+
         let mut tape = self
             .tape
             .lock()
@@ -366,6 +422,13 @@ impl<B: Backend> Backend for Autodiff<B> {
 
     fn sqrt(&self, storage: &Self::Storage, shape: &Shape, dtype: DType) -> Result<Self::Storage> {
         let primal = self.inner.sqrt(&storage.primal, shape, dtype)?;
+
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
 
         let mut tape = self
             .tape
@@ -400,6 +463,13 @@ impl<B: Backend> Backend for Autodiff<B> {
         dtype: DType,
     ) -> Result<Self::Storage> {
         let primal = self.inner.sigmoid(&storage.primal, shape, dtype)?;
+
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
 
         let mut tape = self
             .tape
@@ -472,6 +542,13 @@ impl<B: Backend> Backend for Autodiff<B> {
             .inner
             .expand(&storage.primal, in_shape, out_shape, dtype)?;
 
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
+
         let mut tape = self
             .tape
             .lock()
@@ -508,6 +585,13 @@ impl<B: Backend> Backend for Autodiff<B> {
         let primal = self
             .inner
             .sum_to_shape(&storage.primal, in_shape, out_shape, dtype)?;
+
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
 
         let mut tape = self
             .tape
@@ -546,6 +630,13 @@ impl<B: Backend> Backend for Autodiff<B> {
             .inner
             .reshape(&storage.primal, in_shape, out_shape, dtype)?;
 
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
+
         let mut tape = self
             .tape
             .lock()
@@ -575,6 +666,13 @@ impl<B: Backend> Backend for Autodiff<B> {
     fn exp(&self, storage: &Self::Storage, shape: &Shape, dtype: DType) -> Result<Self::Storage> {
         let primal = self.inner.exp(&storage.primal, shape, dtype)?;
 
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
+
         let mut tape = self
             .tape
             .lock()
@@ -603,6 +701,13 @@ impl<B: Backend> Backend for Autodiff<B> {
 
     fn log(&self, storage: &Self::Storage, shape: &Shape, dtype: DType) -> Result<Self::Storage> {
         let primal = self.inner.log(&storage.primal, shape, dtype)?;
+
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
 
         let mut tape = self
             .tape
@@ -749,6 +854,13 @@ impl<B: Backend> Backend for Autodiff<B> {
             dtype,
         )?;
 
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
+
         let mut tape = self
             .tape
             .lock()
@@ -869,10 +981,37 @@ impl<B: Backend> Backend for Autodiff<B> {
         let primal = self
             .inner
             .cast(&storage.primal, shape, current_dtype, target_dtype)?;
-        // Just passthrough without gradients for cast for now
+
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
+
+        let Some(in_id) = storage.node_id else {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        };
+
+        let mut tape = self
+            .tape
+            .lock()
+            .map_err(|_| OrcaError::InternalError("Mutex poisoned".into()))?;
+        let out_id = tape.generate_id();
+        tape.push_node(Box::new(CastBackward {
+            out_id,
+            in_id,
+            shape: shape.clone(),
+            current_dtype,
+            target_dtype,
+        }));
+
         Ok(AutodiffStorage {
             primal,
-            node_id: None,
+            node_id: Some(out_id),
         })
     }
 
@@ -896,6 +1035,13 @@ impl<B: Backend> Backend for Autodiff<B> {
             index_shape,
             dtype,
         )?;
+
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
 
         let mut tape = self
             .tape
@@ -943,6 +1089,13 @@ impl<B: Backend> Backend for Autodiff<B> {
             index_shape,
             dtype,
         )?;
+
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
 
         let mut tape = self
             .tape
@@ -1022,6 +1175,13 @@ impl<B: Backend> Backend for Autodiff<B> {
         let primal = self
             .inner
             .max_to_shape(&storage.primal, in_shape, out_shape, dtype)?;
+        if !crate::is_grad_enabled() {
+            return Ok(AutodiffStorage {
+                primal,
+                node_id: None,
+            });
+        }
+
         let mut tape = self
             .tape
             .lock()
@@ -1117,6 +1277,26 @@ impl<B: Backend> Backend for Autodiff<B> {
             primal,
             node_id: None,
         })
+    }
+}
+
+#[derive(Debug)]
+struct CastBackward {
+    out_id: NodeId,
+    in_id: NodeId,
+    shape: Shape,
+    current_dtype: DType,
+    target_dtype: DType,
+}
+
+impl<B: Backend> BackwardOp<B> for CastBackward {
+    fn backward(&self, grads: &mut Gradients<B>, backend: &B) -> orca_core::Result<()> {
+        let Some(out_grad) = grads.get(self.out_id) else {
+            return Ok(());
+        };
+
+        let grad = backend.cast(out_grad, &self.shape, self.target_dtype, self.current_dtype)?;
+        grads.accumulate(self.in_id, grad, backend)
     }
 }
 

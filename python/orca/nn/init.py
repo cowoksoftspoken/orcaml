@@ -86,14 +86,18 @@ def _calculate_fan_in_and_fan_out(shape):
     if dimensions < 2:
         raise ValueError("Fan in and fan out can only be calculated for tensors with at least 2 dimensions")
     
-    num_input_fmaps = shape[0]
-    num_output_fmaps = shape[1]
-    receptive_field_size = 1
-    if dimensions > 2:
+    if dimensions == 2:
+        # Linear weight layout: [in_features, out_features]
+        fan_in = shape[0]
+        fan_out = shape[1]
+    else:
+        # Conv weight layout: [out_channels, in_channels_per_group, kh, kw]
+        receptive_field_size = 1
         for s in shape[2:]:
             receptive_field_size *= s
-    fan_in = num_input_fmaps * receptive_field_size
-    fan_out = num_output_fmaps * receptive_field_size
+        fan_in = shape[1] * receptive_field_size
+        fan_out = shape[0] * receptive_field_size
+        
     return fan_in, fan_out
 
 def _calculate_correct_fan(shape, mode):

@@ -14,7 +14,7 @@ class SimpleMLP(nn.Module):
     def forward(self, x):
         return self.fc2(self.relu(self.fc1(x)))
 
-def test_onnx_roundtrip(tmp_path):
+def test_onnx_roundtrip(tmp_path, capsys):
     """Verify that exporting to ONNX and importing back reproduces correct values and gradients."""
     model = SimpleMLP()
     model.eval()
@@ -31,6 +31,7 @@ def test_onnx_roundtrip(tmp_path):
     # 1. Export
     orca.onnx.export_onnx(model, x, onnx_path)
     assert os.path.exists(onnx_path)
+    assert capsys.readouterr().out == ""
     
     # 2. Import
     imported_model = orca.onnx.import_onnx(onnx_path)
@@ -78,3 +79,26 @@ def test_onnx_roundtrip(tmp_path):
     for p in imported_model.parameters():
         assert p.tensor.grad() is not None
         assert any(val != 0.0 for val in p.tensor.grad().to_list())
+
+
+def test_onnx_importer_rejects_unsupported_ops():
+    """Unsupported ONNX ops must fail explicitly instead of silently returning identity."""
+    from orca.onnx.importer import ONNXInterpreter
+
+    model = ONNXInterpreter(
+        nodes=[
+            {
+                "op_type": "UnsupportedOp",
+                "inputs": ["input_0"],
+                "outputs": ["output_0"],
+                "attrs": {},
+            }
+        ],
+        initializers={},
+        child_modules={},
+        graph_input_name="input_0",
+        graph_output_name="output_0",
+    )
+
+    with pytest.raises(NotImplementedError, match="Unsupported ONNX op 'UnsupportedOp'"):
+        model(orca.Tensor.ones([1]))

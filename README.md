@@ -139,7 +139,7 @@ model.fit(dummy_input, dummy_target, epochs=5)
 
 ---
 
-## Performance & Benchmarks
+### Performance & Benchmarks
 
 To evaluate the execution efficiency and scaling properties of the CPU and GPU backends, systematic benchmarks were conducted on a 3-layer Multi-Layer Perceptron (MLP) architecture (Input: 784, Hidden 1: H, Hidden 2: H, Output: 10) across different hidden layer sizes (H = 64, 256, 512) and batch sizes (N = 8, 32).
 
@@ -149,12 +149,12 @@ The table below outlines the average execution time per training step (forward p
 
 | Model Configuration | Batch Size | CPU Time (ms) | GPU (WGPU) Time (ms) | CPU Throughput (samples/s) | GPU (WGPU) Throughput (samples/s) | Speedup (GPU vs CPU) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Small MLP** (H = 64) | 8 | 1.80 | 3.96 | 4444.77 | 2022.39 | 0.45x |
-| **Small MLP** (H = 64) | 32 | 4.80 | 4.94 | 6666.49 | 6480.25 | 0.97x |
-| **Medium MLP** (H = 256) | 8 | 4.25 | 4.54 | 1881.50 | 1760.76 | 0.94x |
-| **Medium MLP** (H = 256) | 32 | 11.37 | 3.21 | 2813.88 | 9962.94 | 3.54x |
-| **Large MLP** (H = 512) | 8 | 8.75 | 3.88 | 913.92 | 2060.60 | 2.25x |
-| **Large MLP** (H = 512) | 32 | 22.16 | 3.51 | 1444.13 | 9118.24 | 6.31x |
+| **Small MLP** (H = 64) | 8 | 2.31 | 4.95 | 3461.40 | 1615.95 | 0.47x |
+| **Small MLP** (H = 64) | 32 | 5.92 | 4.70 | 5408.58 | 6807.38 | 1.26x |
+| **Medium MLP** (H = 256) | 8 | 5.71 | 5.62 | 1400.53 | 1423.84 | 1.02x |
+| **Medium MLP** (H = 256) | 32 | 17.01 | 4.67 | 1881.26 | 6849.56 | 3.64x |
+| **Large MLP** (H = 512) | 8 | 12.85 | 8.16 | 622.60 | 980.28 | 1.57x |
+| **Large MLP** (H = 512) | 32 | 43.24 | 4.71 | 740.07 | 6789.71 | 9.18x |
 
 ![Orca Benchmark Comparison](comparison/benchmark_comparison.png)
 
@@ -164,57 +164,43 @@ The table below outlines the average execution time per training step (forward p
 For workloads with smaller dimensions (e.g., Small MLP at Batch Size 8), the CPU backend demonstrates lower latency than the GPU backend. This behavior is attributed to the fixed overhead associated with GPU shader command submission, pipeline binding, and queue synchronization via the WebGPU API. When the actual compute payload is tiny, these kernel launch latencies dominate the overall execution time.
 
 #### 2. Workload Scaling and Parallelization Gains
-As the size of the model and the batch size scale up, the massive parallel computing architecture of the GPU backend begins to yield significant performance improvements. For the Large MLP configuration at a batch size of 32, the GPU backend achieves a step latency of 3.51 ms compared to 22.16 ms on the CPU, representing a 6.31x speedup and a processing throughput of 9,118.24 samples per second.
+As the size of the model and the batch size scale up, the massive parallel computing architecture of the GPU backend begins to yield significant performance improvements. For the Large MLP configuration at a batch size of 32, the GPU backend achieves a step latency of 4.71 ms compared to 43.24 ms on the CPU, representing a 9.18x speedup and a processing throughput of 6,789.71 samples per second.
 
 For isolated matrix multiplications of size 1024x1024:
 - **CPU Backend (using aligned raw slices)**: 40.46 ms per matmul.
 - **GPU Backend (using parallel compute shaders)**: 0.48 ms per matmul.
 This yields an approximate 84x acceleration factor for compute-bound GEMM primitives.
 
-#### 3. Gradient Tape Management
-To maintain peak performance, the computational graph stored on the Autograd tape (Wengert List) must be explicitly managed. Calling `zero_grad()` at the beginning of each training step is critical. This operation clears the accumulated history from the tape, resetting the graph size back to a single step and avoiding linear latency accumulation.
-
 ---
 
-## Roadmap and Project Status
+## Current Status
 
-The framework is actively developed and has progressed to a feature-complete state for core deep learning training and inference pipelines. Below is the detailed development roadmap and the current status of each phase.
+Orca currently ships the foundation, tensor, autograd, CPU backend, wgpu-based GPU backend, Python bindings, and a TCP distributed baseline. The Python layer also includes `nn`, `optim`, and `data` modules, plus mixed-precision helpers and serialization support.
 
-- **Phase 1: Foundation (Completed)**
-  - Established cargo workspace and core abstraction layers (`orca-core`).
-  - Implemented 64-byte aligned memory allocation to guarantee safe slice casting and AVX-512 vectorization layout.
-  - Built multi-dimensional `Shape` tracking and basic element-wise operators.
-- **Phase 2: Autograd Engine & PyO3 Bindings (Completed)**
-  - Implemented a tape-based reverse-mode automatic differentiation engine (`orca-autograd`).
-  - Configured high-performance Python FFI bindings using Maturin and PyO3.
-- **Phase 3: Broadcasting & Non-Linear Operators (Completed)**
-  - Added broadcasting mechanism (`expand` and `sum_to_shape`) support in backward propagation.
-  - Implemented mathematical primitives (`exp`, `log`, `transpose`).
-  - Verified convergence on XOR classification problems.
-- **Phase 4: ML Primitives & Digit Verification (Completed)**
-  - Implemented standard neural network components: `nn.Linear`, `nn.ReLU`, and `nn.Flatten`.
-  - Added loss metrics: `nn.CrossEntropyLoss` and `nn.MSELoss`.
-  - Solved gradient accumulation bugs by separating overwriting assignments from additive accumulation.
-- **Phase 5: GPU Acceleration (Completed)**
-  - Developed `orca-backend-gpu` utilizing WebGPU (`wgpu`) compute pipelines.
-  - Solved hardware driver limits by decomposing large 1D transpose workgroup sizes into a 2D dispatch grid.
-  - Addressed numerical overflow limits in Tanh activations.
-- **Phase 6: Advanced Architectures & Weight Loaders (Completed)**
-  - Implemented `nn.Conv2d`, `nn.MaxPool2d`, `nn.BatchNorm2d`, `nn.LayerNorm`, `nn.Embedding`, and `nn.TransformerBlock`.
-  - Created blueprints for ResNet-18, BERT-base, and GPT-2 (incorporating weight tying).
-  - Developed an integrated Hugging Face weight loader mapping safetensors directly into Orca modules.
-- **Phase 7: ONNX Integration & Roundtrips (Completed)**
-  - Designed the ONNX model exporter converting the autograd graph into standard ONNX schemas.
-  - Implemented the ONNX importer to rebuild functional `nn.Module` objects from optimized ONNX graphs.
-- **Phase 8: Quantization & Distributed Execution (Planned)**
-  - Integrate mixed-precision operations (FP16 and BF16 execution layouts).
-  - Implement tensor model-parallelism and multi-GPU dispatch capabilities.
+Implemented today:
+
+- Core types and tensor storage in `orca-core` and `orca-tensor`
+- Reverse-mode autograd in `orca-autograd`
+- CPU execution in `orca-backend-cpu`
+- GPU execution in `orca-backend-gpu`
+- Distributed `all_reduce` in `orca-distributed`
+- Python bindings in `orca-python`
+- Python-side `nn`, `optim`, `data`, `autocast`, and `GradScaler`
+- Experimental ONNX import/export helpers under `python/orca/onnx`
+
+Still on the roadmap:
+
+- Production-grade ONNX parity beyond the current experimental helpers
+- JIT/compiler and graph optimization
+- Multi-node distributed beyond the current TCP baseline
+- Mobile/edge targets
+- Third-party hardware backends
 
 ---
 
 ## Contributing Guidelines
 
-We welcome contributions, bug reports, and optimizations. To maintain repository stability and architectural consistency, all contributions must strictly adhere to the guidelines documented in `doc/foundation/` and the rules below.
+We welcome contributions, bug reports, and optimizations. To maintain repository stability and architectural consistency, all contributions must strictly adhere to the guidelines documented in `docs/foundation/` and the rules below.
 
 ### 1. Robust Error Handling
 - The use of `.unwrap()`, `.expect()`, or `panic!` is strictly prohibited in library code (`src/` directories across all crates).

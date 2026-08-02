@@ -1,29 +1,37 @@
+from contextvars import ContextVar
+
+
+_STATE = ContextVar("orca_autocast_state", default=(False, None))
+
+
 class autocast:
-    """
-    Context manager that enables mixed precision for operations.
-    
-    Instances of this class serve as context managers that allow sections of your 
-    model to run in lower precision (such as float16 or bfloat16) to improve GPU 
-    performance and reduce memory consumption.
-    
-    Args:
-        device_type (str, optional): The device type to use ('cpu' or 'gpu'). Default: 'gpu'.
-        dtype (DType, optional): The desired mixed precision data type. If None, 
-            defaults to the recommended dtype for the given device.
-        enabled (bool, optional): If set to False, disables mixed precision for the block. Default: True.
-    """
+    _enabled = False
+    _dtype = None
+
     def __init__(self, device_type='cuda', dtype=None, enabled=True):
         self.device_type = device_type
-        self.dtype = dtype
         self.enabled = enabled
-        
+        import orca
+        self.dtype = dtype or orca.DType.FLOAT16
+        self._tokens = []
+
     def __enter__(self):
-        if self.enabled:
-            pass
-            
+        state = (self.enabled, self.dtype if self.enabled else None)
+        self._tokens.append(_STATE.set(state))
+        autocast._enabled, autocast._dtype = state
+        return self
+
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.enabled:
-            pass
+        _STATE.reset(self._tokens.pop())
+        autocast._enabled, autocast._dtype = _STATE.get()
+
+    @classmethod
+    def is_enabled(cls):
+        return _STATE.get()[0]
+
+    @classmethod
+    def current_dtype(cls):
+        return _STATE.get()[1]
 
 class GradScaler:
     """
@@ -40,10 +48,7 @@ class GradScaler:
     def scale_loss(self, loss):
         if not self.enabled:
             return loss
-        # Since loss is an orca.Tensor, we can multiply it
-        import orca
-        scale_tensor = orca.Tensor.scalar(self.scale, device=loss.device)
-        return loss * scale_tensor
+        return loss * self.scale
         
     def scale_tensor(self, tensor):
         # A wrapper for scale_loss in case people call scale(loss)
@@ -54,11 +59,20 @@ class GradScaler:
             optimizer.step()
             return
             
-        # Check for inf/nan in gradients
+        # 1. Unscale gradients
+        inv_scale = 1.0 / self.scale
+        for param in optimizer.parameters:
+            grad = param.tensor.grad()
+            if grad is not None:
+                unscaled_grad = grad * inv_scale
+                param.tensor.set_grad(unscaled_grad)
+                
+        # 2. Check for inf/nan in gradients
         found_inf = False
         for param in optimizer.parameters:
-            if param.tensor.grad() is not None:
-                if param.tensor.grad().has_nan_or_inf():
+            grad = param.tensor.grad()
+            if grad is not None:
+                if grad.has_nan_or_inf():
                     found_inf = True
                     break
                     

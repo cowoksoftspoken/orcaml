@@ -1,0 +1,477 @@
+{
+  "examples/basics/benchmark_cpu.py": {
+    "mtime": 1784048741.861439,
+    "ast_hash": "97e9def3923dd2a71e010425819b9075",
+    "semantic_hash": "97e9def3923dd2a71e010425819b9075"
+  },
+  "examples/basics/benchmark_gpu.py": {
+    "mtime": 1784048748.6816764,
+    "ast_hash": "4ff67c28db1dd0e7405824110bf697ef",
+    "semantic_hash": "4ff67c28db1dd0e7405824110bf697ef"
+  },
+  "examples/basics/benchmark_matmul_only.py": {
+    "mtime": 1783421002.3409836,
+    "ast_hash": "dca7edfbab08d4a85ff5f40db2371ab8",
+    "semantic_hash": "dca7edfbab08d4a85ff5f40db2371ab8"
+  },
+  "examples/basics/benchmark_mlp_cpu_gpu.py": {
+    "mtime": 1784224259.0306578,
+    "ast_hash": "8e68696e7eb05c29db968b2390c451dc",
+    "semantic_hash": "8e68696e7eb05c29db968b2390c451dc"
+  },
+  "examples/basics/test_grad_check.py": {
+    "mtime": 1783423138.0617616,
+    "ast_hash": "295c6db411f7e9830e838fc7a0557c1d",
+    "semantic_hash": "295c6db411f7e9830e838fc7a0557c1d"
+  },
+  "examples/cv/train_cnn.py": {
+    "mtime": 1783691316.3499658,
+    "ast_hash": "6502ec3f09021ddd0b735c5430345e96",
+    "semantic_hash": "6502ec3f09021ddd0b735c5430345e96"
+  },
+  "examples/mnist/train_mnist.py": {
+    "mtime": 1783147574.939479,
+    "ast_hash": "a407f29c9c39e6b05a8ce01d7ad9f3e2",
+    "semantic_hash": "a407f29c9c39e6b05a8ce01d7ad9f3e2"
+  },
+  "examples/nlp/train_transformer.py": {
+    "mtime": 1783957802.9792485,
+    "ast_hash": "fb35762239e7141de179fee445265f61",
+    "semantic_hash": "fb35762239e7141de179fee445265f61"
+  },
+  "examples/xor/test_xor.py": {
+    "mtime": 1783958243.1765208,
+    "ast_hash": "c72549a76331d309290e2f27523843dd",
+    "semantic_hash": "c72549a76331d309290e2f27523843dd"
+  },
+  "examples/xor/test_xor_batch.py": {
+    "mtime": 1783958055.4834359,
+    "ast_hash": "0ad74fa219b4b173764b363eb4e1f071",
+    "semantic_hash": "0ad74fa219b4b173764b363eb4e1f071"
+  },
+  "orca-autograd/src/backend.rs": {
+    "mtime": 1785650539.7215557,
+    "ast_hash": "5450ac74a4fc18b97b8035b17aa12993",
+    "semantic_hash": ""
+  },
+  "orca-autograd/src/lib.rs": {
+    "mtime": 1785650322.7351308,
+    "ast_hash": "de6fb1b4f7be9c93f29f3e003330e24b",
+    "semantic_hash": ""
+  },
+  "orca-autograd/src/tape.rs": {
+    "mtime": 1784225615.8062575,
+    "ast_hash": "85a45dc9a75de88ffeed42c89b351a81",
+    "semantic_hash": "85a45dc9a75de88ffeed42c89b351a81"
+  },
+  "orca-autograd/src/tensor.rs": {
+    "mtime": 1783862854.3587308,
+    "ast_hash": "f15c8fda3e91f8f086d8230fe73d7b71",
+    "semantic_hash": "f15c8fda3e91f8f086d8230fe73d7b71"
+  },
+  "orca-autograd/tests/autograd_tests.rs": {
+    "mtime": 1784224721.2977402,
+    "ast_hash": "6852bfcb4261e9f6fc70e50048355ae7",
+    "semantic_hash": "6852bfcb4261e9f6fc70e50048355ae7"
+  },
+  "orca-backend-cpu/src/backend.rs": {
+    "mtime": 1785662370.7427452,
+    "ast_hash": "f20e9f42f3f9dd8761c5b827508ca236",
+    "semantic_hash": ""
+  },
+  "orca-backend-cpu/src/lib.rs": {
+    "mtime": 1783862854.3782616,
+    "ast_hash": "9e45aef5298468dade35c65363201ec6",
+    "semantic_hash": "9e45aef5298468dade35c65363201ec6"
+  },
+  "orca-backend-cpu/src/math.rs": {
+    "mtime": 1783862854.3815258,
+    "ast_hash": "11ad4bea530535d519b69b9769baf38e",
+    "semantic_hash": "11ad4bea530535d519b69b9769baf38e"
+  },
+  "orca-backend-cpu/src/storage.rs": {
+    "mtime": 1785662370.7487447,
+    "ast_hash": "b7f32d21a2ef88adfb3b691c7398e857",
+    "semantic_hash": ""
+  },
+  "orca-backend-gpu/src/backend.rs": {
+    "mtime": 1785662626.0454185,
+    "ast_hash": "68f6c7794b32552678e1f59e0842aae9",
+    "semantic_hash": ""
+  },
+  "orca-backend-gpu/src/lib.rs": {
+    "mtime": 1783862854.4213324,
+    "ast_hash": "bdd2168cc2202ed791145f9f7024e469",
+    "semantic_hash": "bdd2168cc2202ed791145f9f7024e469"
+  },
+  "orca-backend-gpu/src/pool.rs": {
+    "mtime": 1784303499.4019773,
+    "ast_hash": "5b8e681d0d81e1daa0e7a83cbaac9109",
+    "semantic_hash": "5b8e681d0d81e1daa0e7a83cbaac9109"
+  },
+  "orca-backend-gpu/src/storage.rs": {
+    "mtime": 1785662456.7977006,
+    "ast_hash": "068b5dc9364de48c02e76be10b867a9a",
+    "semantic_hash": ""
+  },
+  "orca-core/src/device.rs": {
+    "mtime": 1783142936.0413508,
+    "ast_hash": "327b901be6735e897431e12b5ce7b63d",
+    "semantic_hash": "327b901be6735e897431e12b5ce7b63d"
+  },
+  "orca-core/src/dtype.rs": {
+    "mtime": 1785650533.0437152,
+    "ast_hash": "41e7a8399db1222bf8a96e50a1e31dbd",
+    "semantic_hash": ""
+  },
+  "orca-core/src/error.rs": {
+    "mtime": 1784304934.718154,
+    "ast_hash": "938f80c64c5702d39ce0fad08f7276ce",
+    "semantic_hash": "938f80c64c5702d39ce0fad08f7276ce"
+  },
+  "orca-core/src/lib.rs": {
+    "mtime": 1783142204.6335473,
+    "ast_hash": "0128346311dfe19bad4b27815f8d6a99",
+    "semantic_hash": "0128346311dfe19bad4b27815f8d6a99"
+  },
+  "orca-core/src/shape.rs": {
+    "mtime": 1783142204.6455476,
+    "ast_hash": "5e2b0cce362ab1a8db24ed9e502bd04d",
+    "semantic_hash": "5e2b0cce362ab1a8db24ed9e502bd04d"
+  },
+  "orca-distributed/src/lib.rs": {
+    "mtime": 1785650539.7897933,
+    "ast_hash": "f7776a1d48d40f3aa04d821c39f59ac4",
+    "semantic_hash": ""
+  },
+  "orca-python/src/lib.rs": {
+    "mtime": 1785662673.573992,
+    "ast_hash": "91fbb0f688eec525d80c1b4f9d2fdb70",
+    "semantic_hash": ""
+  },
+  "orca-serialize/src/lib.rs": {
+    "mtime": 1784300758.4800148,
+    "ast_hash": "1b19a3ef74a8a20133ee052901d1bdab",
+    "semantic_hash": "1b19a3ef74a8a20133ee052901d1bdab"
+  },
+  "orca-tensor/src/backend.rs": {
+    "mtime": 1784224670.7705805,
+    "ast_hash": "c9e8ed24331b19ae6d7bb3336a334040",
+    "semantic_hash": "c9e8ed24331b19ae6d7bb3336a334040"
+  },
+  "orca-tensor/src/lib.rs": {
+    "mtime": 1783142204.7203407,
+    "ast_hash": "58fbddeb14037323b759843d7780c84b",
+    "semantic_hash": "58fbddeb14037323b759843d7780c84b"
+  },
+  "orca-tensor/src/tensor.rs": {
+    "mtime": 1785650322.73313,
+    "ast_hash": "f84e5d071d38e92c2f2699f709707767",
+    "semantic_hash": ""
+  },
+  "pyproject.toml": {
+    "mtime": 1785650322.7402582,
+    "ast_hash": "7cb2ba71e1884cbff6fbea16aa3492e9",
+    "semantic_hash": ""
+  },
+  "python/orca/__init__.py": {
+    "mtime": 1784297140.5427797,
+    "ast_hash": "203d547d54b688ff0d9ed747ab563613",
+    "semantic_hash": "203d547d54b688ff0d9ed747ab563613"
+  },
+  "python/orca/autocast.py": {
+    "mtime": 1785650322.7372568,
+    "ast_hash": "50e19d82f0782c622bde5e591a856046",
+    "semantic_hash": ""
+  },
+  "python/orca/core.py": {
+    "mtime": 1783142204.758854,
+    "ast_hash": "52e38ca9a86f6a6e8300bfa025e17cbf",
+    "semantic_hash": "52e38ca9a86f6a6e8300bfa025e17cbf"
+  },
+  "python/orca/data/__init__.py": {
+    "mtime": 1783951112.8256102,
+    "ast_hash": "c34d89b375d3f0ce13423c2e40c82940",
+    "semantic_hash": "c34d89b375d3f0ce13423c2e40c82940"
+  },
+  "python/orca/data/dataloader.py": {
+    "mtime": 1783951146.4052093,
+    "ast_hash": "333c0d951a472b1a420a577bbc78bed2",
+    "semantic_hash": "333c0d951a472b1a420a577bbc78bed2"
+  },
+  "python/orca/data/transforms.py": {
+    "mtime": 1783616833.4679291,
+    "ast_hash": "87d01b51e1c2b752b6d730ba8e48eac6",
+    "semantic_hash": "87d01b51e1c2b752b6d730ba8e48eac6"
+  },
+  "python/orca/distributed.py": {
+    "mtime": 1784222937.6787333,
+    "ast_hash": "c2191945dd43c122e8fdb35051fe73d4",
+    "semantic_hash": "c2191945dd43c122e8fdb35051fe73d4"
+  },
+  "python/orca/hf/__init__.py": {
+    "mtime": 1784052101.2104592,
+    "ast_hash": "b349219be3dace9f037241c35b4e5cfe",
+    "semantic_hash": "b349219be3dace9f037241c35b4e5cfe"
+  },
+  "python/orca/hf/loader.py": {
+    "mtime": 1783955153.6611977,
+    "ast_hash": "1471c27220ff4ffa517e9d7519d140ca",
+    "semantic_hash": "1471c27220ff4ffa517e9d7519d140ca"
+  },
+  "python/orca/nn/__init__.py": {
+    "mtime": 1784303245.392429,
+    "ast_hash": "7b4b781e11604ab0ed65e58b0f7e00be",
+    "semantic_hash": "7b4b781e11604ab0ed65e58b0f7e00be"
+  },
+  "python/orca/nn/activation.py": {
+    "mtime": 1783955426.560823,
+    "ast_hash": "d3ff3d31b23b15de15cdb600f2a2b06f",
+    "semantic_hash": "d3ff3d31b23b15de15cdb600f2a2b06f"
+  },
+  "python/orca/nn/attention.py": {
+    "mtime": 1783950497.7609134,
+    "ast_hash": "bc5f77464ea4e60aa6e84a8042f78b56",
+    "semantic_hash": "bc5f77464ea4e60aa6e84a8042f78b56"
+  },
+  "python/orca/nn/container.py": {
+    "mtime": 1783418517.8310535,
+    "ast_hash": "01795a87b605f4a7f342d373c2760e1e",
+    "semantic_hash": "01795a87b605f4a7f342d373c2760e1e"
+  },
+  "python/orca/nn/conv.py": {
+    "mtime": 1783701521.1896122,
+    "ast_hash": "97de95dcc69fef714758b7a1bbc1dcad",
+    "semantic_hash": "97de95dcc69fef714758b7a1bbc1dcad"
+  },
+  "python/orca/nn/dropout.py": {
+    "mtime": 1783150999.3904114,
+    "ast_hash": "a23d1e596ddb3d38eb4d118b18e45b2f",
+    "semantic_hash": "a23d1e596ddb3d38eb4d118b18e45b2f"
+  },
+  "python/orca/nn/embedding.py": {
+    "mtime": 1783954394.6965697,
+    "ast_hash": "edfa7cb4b652ec2c293d1e33279ee3eb",
+    "semantic_hash": "edfa7cb4b652ec2c293d1e33279ee3eb"
+  },
+  "python/orca/nn/flatten.py": {
+    "mtime": 1783149754.5875683,
+    "ast_hash": "2dcf70838c289e902e67eab3b5acdc4b",
+    "semantic_hash": "2dcf70838c289e902e67eab3b5acdc4b"
+  },
+  "python/orca/nn/init.py": {
+    "mtime": 1784298419.0794258,
+    "ast_hash": "6b051bd1af70b7cddf7c1788ec34e7ad",
+    "semantic_hash": "6b051bd1af70b7cddf7c1788ec34e7ad"
+  },
+  "python/orca/nn/linear.py": {
+    "mtime": 1785650322.7382565,
+    "ast_hash": "f3fef48d69c904534a94d79123485b2e",
+    "semantic_hash": ""
+  },
+  "python/orca/nn/loss.py": {
+    "mtime": 1783701562.9133804,
+    "ast_hash": "5aefd654be51744ba268a3bc9f5651df",
+    "semantic_hash": "5aefd654be51744ba268a3bc9f5651df"
+  },
+  "python/orca/nn/model.py": {
+    "mtime": 1784303304.5406423,
+    "ast_hash": "8a9b647aa65be5d6f8e6359a3cf54976",
+    "semantic_hash": "8a9b647aa65be5d6f8e6359a3cf54976"
+  },
+  "python/orca/nn/module.py": {
+    "mtime": 1783701482.96456,
+    "ast_hash": "f8dc67de0a2fdc36fcc77ba0301caf48",
+    "semantic_hash": "f8dc67de0a2fdc36fcc77ba0301caf48"
+  },
+  "python/orca/nn/normalization.py": {
+    "mtime": 1784225612.857855,
+    "ast_hash": "8004784ef5aa8906a12116c9df09c37e",
+    "semantic_hash": "8004784ef5aa8906a12116c9df09c37e"
+  },
+  "python/orca/nn/parameter.py": {
+    "mtime": 1783701480.8642724,
+    "ast_hash": "2a136289d42be296fbca0c031e38610b",
+    "semantic_hash": "2a136289d42be296fbca0c031e38610b"
+  },
+  "python/orca/nn/pooling.py": {
+    "mtime": 1783954484.6403112,
+    "ast_hash": "d87a63decb652bca0feffc28f2c6b9a7",
+    "semantic_hash": "d87a63decb652bca0feffc28f2c6b9a7"
+  },
+  "python/orca/nn/quantized.py": {
+    "mtime": 1784308092.6765027,
+    "ast_hash": "2fb71261d2f7264d2d871546eacaa06e",
+    "semantic_hash": "2fb71261d2f7264d2d871546eacaa06e"
+  },
+  "python/orca/nn/transformer.py": {
+    "mtime": 1783955702.0406778,
+    "ast_hash": "b1e3318a9c9cec635aae6bfd61554e9e",
+    "semantic_hash": "b1e3318a9c9cec635aae6bfd61554e9e"
+  },
+  "python/orca/onnx/__init__.py": {
+    "mtime": 1784052093.4060755,
+    "ast_hash": "76b2cf12b5543f31eb0b345b0355e534",
+    "semantic_hash": "76b2cf12b5543f31eb0b345b0355e534"
+  },
+  "python/orca/onnx/exporter.py": {
+    "mtime": 1785664522.372569,
+    "ast_hash": "88cea6e4ed0ac221577c6791275bdd50",
+    "semantic_hash": ""
+  },
+  "python/orca/onnx/importer.py": {
+    "mtime": 1785664622.726611,
+    "ast_hash": "a82367b388139864e66c204b88b6a9c7",
+    "semantic_hash": ""
+  },
+  "python/orca/optim/__init__.py": {
+    "mtime": 1783616944.5998728,
+    "ast_hash": "f473032e8e162b7097b9212c9a97c183",
+    "semantic_hash": "f473032e8e162b7097b9212c9a97c183"
+  },
+  "python/orca/optim/adam.py": {
+    "mtime": 1785665097.0132785,
+    "ast_hash": "da3aa61cf479c58e897735ce8e425c2e",
+    "semantic_hash": ""
+  },
+  "python/orca/optim/adamw.py": {
+    "mtime": 1785665097.0156102,
+    "ast_hash": "3d1ad7c09830fa6f552258f78f2044de",
+    "semantic_hash": ""
+  },
+  "python/orca/optim/clip.py": {
+    "mtime": 1783860216.629598,
+    "ast_hash": "2236cb86ecfb13226e867f2b5f7d7698",
+    "semantic_hash": "2236cb86ecfb13226e867f2b5f7d7698"
+  },
+  "python/orca/optim/lr_scheduler.py": {
+    "mtime": 1785665047.775536,
+    "ast_hash": "3421875416ad25cd33e29ddeef006e96",
+    "semantic_hash": ""
+  },
+  "python/orca/optim/optimizer.py": {
+    "mtime": 1785664897.1765501,
+    "ast_hash": "8bd40ccb25af86f5d6f2f9b60e40e91d",
+    "semantic_hash": ""
+  },
+  "python/orca/optim/sgd.py": {
+    "mtime": 1785665037.8608425,
+    "ast_hash": "00e45e47b38b75d871e9a77d0946da29",
+    "semantic_hash": ""
+  },
+  "python/orca/tensor.py": {
+    "mtime": 1784297666.8574235,
+    "ast_hash": "854888a6cf3fa4ec07ac5fd9ada6281b",
+    "semantic_hash": "854888a6cf3fa4ec07ac5fd9ada6281b"
+  },
+  "python/orca/zoo/__init__.py": {
+    "mtime": 1783953868.060194,
+    "ast_hash": "b4f8c38517047ba507ffd8f700cae4f7",
+    "semantic_hash": "b4f8c38517047ba507ffd8f700cae4f7"
+  },
+  "python/orca/zoo/bert.py": {
+    "mtime": 1783954474.0736263,
+    "ast_hash": "a5fac375840c7a613a5ce78c3b350c93",
+    "semantic_hash": "a5fac375840c7a613a5ce78c3b350c93"
+  },
+  "python/orca/zoo/gpt2.py": {
+    "mtime": 1783955695.6524615,
+    "ast_hash": "b0b4ca63f3f0ef1b6533739e6746f852",
+    "semantic_hash": "b0b4ca63f3f0ef1b6533739e6746f852"
+  },
+  "python/orca/zoo/resnet.py": {
+    "mtime": 1783953843.6254146,
+    "ast_hash": "f4f456e91969f9d9b0afb73d1608d07f",
+    "semantic_hash": "f4f456e91969f9d9b0afb73d1608d07f"
+  },
+  "python/tests/stress_onnx.py": {
+    "mtime": 1783953570.1124835,
+    "ast_hash": "7d84e93c348bf2de7b6fc901253dca41",
+    "semantic_hash": "7d84e93c348bf2de7b6fc901253dca41"
+  },
+  "python/tests/stress_zoo.py": {
+    "mtime": 1783955717.2071416,
+    "ast_hash": "a530151f5481c384f41cbc46b43df4bc",
+    "semantic_hash": "a530151f5481c384f41cbc46b43df4bc"
+  },
+  "python/tests/test_api.py": {
+    "mtime": 1785665145.6222806,
+    "ast_hash": "762a0a5c289c3f00931b8a7391f97245",
+    "semantic_hash": ""
+  },
+  "python/tests/test_onnx.py": {
+    "mtime": 1785664536.3845913,
+    "ast_hash": "0326c591392c6bf20acf18da7ec6fbdf",
+    "semantic_hash": ""
+  },
+  "python/tests/test_phase8.py": {
+    "mtime": 1785650434.261089,
+    "ast_hash": "bed1a350986143af20142f0226be982c",
+    "semantic_hash": ""
+  },
+  "python/tests/test_zoo.py": {
+    "mtime": 1783953906.9377012,
+    "ast_hash": "b41d9ce78c4e5f75f250b82662c33fd2",
+    "semantic_hash": "b41d9ce78c4e5f75f250b82662c33fd2"
+  },
+  ".agents/AGENTS.md": {
+    "mtime": 1785664320.092917,
+    "ast_hash": "2c54a20bd23ae02101a5787a560041d1",
+    "semantic_hash": ""
+  },
+  ".github/workflows/ci.yml": {
+    "mtime": 1783862379.0872445,
+    "ast_hash": "06ef20b1bd946604e1336fb13aa02c06",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1785664527.3138092,
+    "ast_hash": "9713c79985bccc7f0e1bed04c7202508",
+    "semantic_hash": ""
+  },
+  "docs/foundation/01-VISION.md": {
+    "mtime": 1785664398.1713586,
+    "ast_hash": "54411ae94f2eae76e85fdfe46b937001",
+    "semantic_hash": ""
+  },
+  "docs/foundation/02-ARCHITECTURE.md": {
+    "mtime": 1785663039.6302447,
+    "ast_hash": "dc6fe88121496cc2915b52cc95317021",
+    "semantic_hash": ""
+  },
+  "docs/foundation/03-CODING-STANDARDS.md": {
+    "mtime": 1785664143.9380968,
+    "ast_hash": "36280752c6b3d618a89ac32169754aed",
+    "semantic_hash": ""
+  },
+  "docs/foundation/04-RFC-PROCESS.md": {
+    "mtime": 1783142204.401581,
+    "ast_hash": "b0a74d4274d1d0a73d3af3573fe48082",
+    "semantic_hash": ""
+  },
+  "docs/foundation/05-ROADMAP.md": {
+    "mtime": 1785663616.478353,
+    "ast_hash": "8b3ef244b6ecb73fffaddc30647dbacb",
+    "semantic_hash": ""
+  },
+  "docs/foundation/06-AI-COLLABORATION-GUIDE.md": {
+    "mtime": 1785664231.8603835,
+    "ast_hash": "3aefa553275b5cacdfeaade77526dc76",
+    "semantic_hash": ""
+  },
+  "comparison/benchmark_comparison.png": {
+    "mtime": 1784224269.8242579,
+    "ast_hash": "1c2c947ca61df41e0ec1b1558530dc05",
+    "semantic_hash": ""
+  },
+  "docs/rfcs/INDEX.md": {
+    "mtime": 1785662885.1966145,
+    "ast_hash": "6cf629e4522d4209681d70b69dfe49fe",
+    "semantic_hash": ""
+  },
+  "docs/rfcs/RFC-0001-distributed-backend.md": {
+    "mtime": 1785662885.1976202,
+    "ast_hash": "2c8e185fd443f6a69bb64ba2d6291863",
+    "semantic_hash": ""
+  }
+}

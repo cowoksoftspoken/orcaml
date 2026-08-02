@@ -5,7 +5,7 @@ use orca_tensor::Tensor;
 
 #[test]
 fn test_basic_autograd() -> Result<()> {
-    let backend = CpuBackend::default();
+    let backend = CpuBackend;
     let autodiff_backend = Autodiff::new(backend);
 
     // Create leaf tensors
@@ -54,7 +54,7 @@ fn test_basic_autograd() -> Result<()> {
 
 #[test]
 fn test_autograd_activation() -> Result<()> {
-    let backend = CpuBackend::default();
+    let backend = CpuBackend;
     let autodiff_backend = Autodiff::new(backend);
 
     let mut x = Tensor::from_f32_slice(

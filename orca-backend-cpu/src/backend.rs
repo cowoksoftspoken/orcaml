@@ -57,7 +57,7 @@ impl CpuBackend {
         let element_size = std::mem::size_of::<T>();
         let num_elements = shape.num_elements();
         let total_bytes = num_elements * element_size;
-        let mut storage = CpuByteStorage::new(total_bytes, num_elements, element_size);
+        let mut storage = CpuByteStorage::new(total_bytes, num_elements, element_size)?;
         storage.as_mut_slice::<T>().copy_from_slice(data);
         Ok(storage)
     }
@@ -81,7 +81,7 @@ impl Backend for CpuBackend {
         let num_elements = shape.num_elements();
         let total_bytes = num_elements * element_size;
 
-        Ok(CpuByteStorage::new(total_bytes, num_elements, element_size))
+        CpuByteStorage::new(total_bytes, num_elements, element_size)
     }
 
     fn from_f32_slice(&self, shape: &Shape, data: &[f32]) -> Result<Self::Storage> {
@@ -108,6 +108,13 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let lhs_f32 = self.cast(lhs, shape, dtype, DType::F32)?;
+            let rhs_f32 = self.cast(rhs, shape, dtype, DType::F32)?;
+            let res_f32 = self.add(&lhs_f32, &rhs_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_dtype!(dtype, T, {
             let lhs_slice = lhs.as_slice::<T>();
             let rhs_slice = rhs.as_slice::<T>();
@@ -128,6 +135,22 @@ impl Backend for CpuBackend {
         rhs_shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let lhs_f32 = self.cast(lhs, lhs_shape, dtype, DType::F32)?;
+            let rhs_f32 = self.cast(rhs, rhs_shape, dtype, DType::F32)?;
+            let res_f32 = self.matmul(&lhs_f32, &rhs_f32, lhs_shape, rhs_shape, DType::F32)?;
+
+            let rank = lhs_shape.rank();
+            let m = lhs_shape[rank - 2];
+            let n = rhs_shape[rank - 1];
+            let mut out_shape_dims = lhs_shape.to_vec();
+            out_shape_dims[rank - 2] = m;
+            out_shape_dims[rank - 1] = n;
+            let out_shape = Shape::new(out_shape_dims);
+
+            return self.cast(&res_f32, &out_shape, DType::F32, dtype);
+        }
+
         if dtype != DType::F32 {
             return Err(OrcaError::UnsupportedDType {
                 op: "matmul (cpu)",
@@ -205,6 +228,14 @@ impl Backend for CpuBackend {
         dim1: usize,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let s_f32 = self.cast(storage, shape, dtype, DType::F32)?;
+            let res_f32 = self.transpose(&s_f32, shape, dim0, dim1, DType::F32)?;
+            let mut out_shape = shape.to_vec();
+            out_shape.swap(dim0, dim1);
+            return self.cast(&res_f32, &Shape::new(out_shape), DType::F32, dtype);
+        }
+
         if dim0 >= shape.rank() || dim1 >= shape.rank() {
             return Err(OrcaError::InternalError(
                 "Invalid transpose dimensions".into(),
@@ -264,6 +295,13 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let lhs_f32 = self.cast(lhs, shape, dtype, DType::F32)?;
+            let rhs_f32 = self.cast(rhs, shape, dtype, DType::F32)?;
+            let res_f32 = self.sub(&lhs_f32, &rhs_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_dtype!(dtype, T, {
             let lhs_slice = lhs.as_slice::<T>();
             let rhs_slice = rhs.as_slice::<T>();
@@ -283,6 +321,12 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let s_f32 = self.cast(storage, shape, dtype, DType::F32)?;
+            let res_f32 = self.mul_scalar(&s_f32, scalar, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_dtype!(dtype, T, {
             let in_slice = storage.as_slice::<T>();
             let scalar_t = T::from_f32(scalar);
@@ -300,6 +344,13 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let lhs_f32 = self.cast(lhs, shape, dtype, DType::F32)?;
+            let rhs_f32 = self.cast(rhs, shape, dtype, DType::F32)?;
+            let res_f32 = self.mul(&lhs_f32, &rhs_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         if dtype != DType::F32 {
             return Err(OrcaError::UnsupportedDType {
                 op: "mul (cpu)",
@@ -322,6 +373,12 @@ impl Backend for CpuBackend {
     }
 
     fn relu(&self, storage: &Self::Storage, shape: &Shape, dtype: DType) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let s_f32 = self.cast(storage, shape, dtype, DType::F32)?;
+            let res_f32 = self.relu(&s_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let in_slice = storage.as_slice::<T>();
             let result: Vec<T> = in_slice
@@ -338,6 +395,12 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let s_f32 = self.cast(storage, shape, dtype, DType::F32)?;
+            let res_f32 = self.sigmoid(&s_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let in_slice = storage.as_slice::<T>();
             let result: Vec<T> = in_slice
@@ -355,6 +418,13 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let g_f32 = self.cast(grad_out, shape, dtype, DType::F32)?;
+            let i_f32 = self.cast(in_primal, shape, dtype, DType::F32)?;
+            let res_f32 = self.relu_backward(&g_f32, &i_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let grad_slice = grad_out.as_slice::<T>();
             let in_slice = in_primal.as_slice::<T>();
@@ -374,6 +444,13 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let g_f32 = self.cast(grad_out, shape, dtype, DType::F32)?;
+            let o_f32 = self.cast(out_primal, shape, dtype, DType::F32)?;
+            let res_f32 = self.sigmoid_backward(&g_f32, &o_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let grad_slice = grad_out.as_slice::<T>();
             let out_slice = out_primal.as_slice::<T>();
@@ -393,6 +470,12 @@ impl Backend for CpuBackend {
         out_shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let s_f32 = self.cast(storage, in_shape, dtype, DType::F32)?;
+            let res_f32 = self.expand(&s_f32, in_shape, out_shape, DType::F32)?;
+            return self.cast(&res_f32, out_shape, DType::F32, dtype);
+        }
+
         dispatch_dtype!(dtype, T, {
             let in_slice = storage.as_slice::<T>();
             let mut result = vec![T::zero(); out_shape.num_elements()];
@@ -420,6 +503,12 @@ impl Backend for CpuBackend {
         out_shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let s_f32 = self.cast(storage, in_shape, dtype, DType::F32)?;
+            let res_f32 = self.sum_to_shape(&s_f32, in_shape, out_shape, DType::F32)?;
+            return self.cast(&res_f32, out_shape, DType::F32, dtype);
+        }
+
         dispatch_dtype!(dtype, T, {
             let in_slice = storage.as_slice::<T>();
             let mut result = vec![T::zero(); out_shape.num_elements()];
@@ -458,6 +547,12 @@ impl Backend for CpuBackend {
     }
 
     fn exp(&self, storage: &Self::Storage, shape: &Shape, dtype: DType) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let s_f32 = self.cast(storage, shape, dtype, DType::F32)?;
+            let res_f32 = self.exp(&s_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let in_slice = storage.as_slice::<T>();
             let result: Vec<T> = in_slice
@@ -469,6 +564,12 @@ impl Backend for CpuBackend {
     }
 
     fn log(&self, storage: &Self::Storage, shape: &Shape, dtype: DType) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let s_f32 = self.cast(storage, shape, dtype, DType::F32)?;
+            let res_f32 = self.log(&s_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let in_slice = storage.as_slice::<T>();
             let result: Vec<T> = in_slice
@@ -486,6 +587,13 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let g_f32 = self.cast(grad_out, shape, dtype, DType::F32)?;
+            let o_f32 = self.cast(out_primal, shape, dtype, DType::F32)?;
+            let res_f32 = self.exp_backward(&g_f32, &o_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let grad_slice = grad_out.as_slice::<T>();
             let out_slice = out_primal.as_slice::<T>();
@@ -505,6 +613,13 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let g_f32 = self.cast(grad_out, shape, dtype, DType::F32)?;
+            let i_f32 = self.cast(in_primal, shape, dtype, DType::F32)?;
+            let res_f32 = self.log_backward(&g_f32, &i_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let grad_slice = grad_out.as_slice::<T>();
             let in_slice = in_primal.as_slice::<T>();
@@ -524,6 +639,13 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let lhs_f32 = self.cast(lhs, shape, dtype, DType::F32)?;
+            let rhs_f32 = self.cast(rhs, shape, dtype, DType::F32)?;
+            let res_f32 = self.div(&lhs_f32, &rhs_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let lhs_slice = lhs.as_slice::<T>();
             let rhs_slice = rhs.as_slice::<T>();
@@ -537,6 +659,12 @@ impl Backend for CpuBackend {
     }
 
     fn sqrt(&self, storage: &Self::Storage, shape: &Shape, dtype: DType) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let s_f32 = self.cast(storage, shape, dtype, DType::F32)?;
+            let res_f32 = self.sqrt(&s_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let in_slice = storage.as_slice::<T>();
             let result: Vec<T> = in_slice
@@ -554,6 +682,13 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let g_f32 = self.cast(grad_out, shape, dtype, DType::F32)?;
+            let r_f32 = self.cast(rhs_primal, shape, dtype, DType::F32)?;
+            let res_f32 = self.div_backward_lhs(&g_f32, &r_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let grad_slice = grad_out.as_slice::<T>();
             let rhs_slice = rhs_primal.as_slice::<T>();
@@ -573,6 +708,14 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let g_f32 = self.cast(grad_out, shape, dtype, DType::F32)?;
+            let l_f32 = self.cast(lhs_primal, shape, dtype, DType::F32)?;
+            let r_f32 = self.cast(rhs_primal, shape, dtype, DType::F32)?;
+            let res_f32 = self.div_backward_rhs(&g_f32, &l_f32, &r_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let grad_slice = grad_out.as_slice::<T>();
             let lhs_slice = lhs_primal.as_slice::<T>();
@@ -595,6 +738,13 @@ impl Backend for CpuBackend {
         shape: &Shape,
         dtype: DType,
     ) -> Result<Self::Storage> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let g_f32 = self.cast(grad_out, shape, dtype, DType::F32)?;
+            let o_f32 = self.cast(out_primal, shape, dtype, DType::F32)?;
+            let res_f32 = self.sqrt_backward(&g_f32, &o_f32, shape, DType::F32)?;
+            return self.cast(&res_f32, shape, DType::F32, dtype);
+        }
+
         dispatch_float!(dtype, T, {
             let grad_slice = grad_out.as_slice::<T>();
             let out_slice = out_primal.as_slice::<T>();
@@ -916,20 +1066,77 @@ impl Backend for CpuBackend {
             return Ok(storage.clone());
         }
 
-        // For now, we mainly support casting to F32 as everything in CPU backend is internally F32 slices basically.
-        // Wait, CpuByteStorage doesn't actually store typed data natively yet (except as bytes).
-        // Since we only really use F32 right now, casting F32 to F32 is a no-op.
-        // If they ask for anything else, we'll try to convert.
+        if current_dtype == DType::F32 && target_dtype == DType::F64 {
+            let input = storage.as_slice::<f32>();
+            let output: Vec<f64> = input.iter().map(|&value| value as f64).collect();
+            return self.from_slice::<f64>(_shape, &output, target_dtype);
+        }
 
-        if current_dtype == target_dtype {
-            let mut out = CpuByteStorage::new(storage.as_bytes().len(), storage.len(), 4);
-            out.as_mut_bytes().copy_from_slice(storage.as_bytes());
+        if current_dtype == DType::F64 && target_dtype == DType::F32 {
+            let input = storage.as_slice::<f64>();
+            let output: Vec<f32> = input.iter().map(|&value| value as f32).collect();
+            return self.from_slice::<f32>(_shape, &output, target_dtype);
+        }
+
+        // F32 -> F16
+        if current_dtype == DType::F32 && target_dtype == DType::F16 {
+            let in_slice = storage.as_slice::<f32>();
+            let mut out = CpuByteStorage::new(storage.len() * 2, storage.len(), 2)?;
+            let out_slice = out.as_mut_slice::<u16>();
+            for (i, &val) in in_slice.iter().enumerate() {
+                out_slice[i] = DType::f32_to_f16(val);
+            }
             return Ok(out);
+        }
+
+        // F32 -> BF16
+        if current_dtype == DType::F32 && target_dtype == DType::BF16 {
+            let in_slice = storage.as_slice::<f32>();
+            let mut out = CpuByteStorage::new(storage.len() * 2, storage.len(), 2)?;
+            let out_slice = out.as_mut_slice::<u16>();
+            for (i, &val) in in_slice.iter().enumerate() {
+                out_slice[i] = DType::f32_to_bf16(val);
+            }
+            return Ok(out);
+        }
+
+        // F16 -> F32
+        if current_dtype == DType::F16 && target_dtype == DType::F32 {
+            let in_slice = storage.as_slice::<u16>();
+            let mut out = CpuByteStorage::new(storage.len() * 4, storage.len(), 4)?;
+            let out_slice = out.as_mut_slice::<f32>();
+            for (i, &val) in in_slice.iter().enumerate() {
+                out_slice[i] = DType::f16_to_f32(val);
+            }
+            return Ok(out);
+        }
+
+        // BF16 -> F32
+        if current_dtype == DType::BF16 && target_dtype == DType::F32 {
+            let in_slice = storage.as_slice::<u16>();
+            let mut out = CpuByteStorage::new(storage.len() * 4, storage.len(), 4)?;
+            let out_slice = out.as_mut_slice::<f32>();
+            for (i, &val) in in_slice.iter().enumerate() {
+                out_slice[i] = DType::bf16_to_f32(val);
+            }
+            return Ok(out);
+        }
+
+        // F16 -> BF16 (via F32)
+        if current_dtype == DType::F16 && target_dtype == DType::BF16 {
+            let f32_storage = self.cast(storage, _shape, DType::F16, DType::F32)?;
+            return self.cast(&f32_storage, _shape, DType::F32, DType::BF16);
+        }
+
+        // BF16 -> F16 (via F32)
+        if current_dtype == DType::BF16 && target_dtype == DType::F16 {
+            let f32_storage = self.cast(storage, _shape, DType::BF16, DType::F32)?;
+            return self.cast(&f32_storage, _shape, DType::F32, DType::F16);
         }
 
         if current_dtype == DType::I32 && target_dtype == DType::F32 {
             let in_i32 = storage.as_slice::<i32>();
-            let mut out = CpuByteStorage::new(storage.len() * 4, storage.len(), 4);
+            let mut out = CpuByteStorage::new(storage.len() * 4, storage.len(), 4)?;
             let out_f32 = out.as_mut_slice::<f32>();
             for (i, &val) in in_i32.iter().enumerate() {
                 out_f32[i] = val as f32;
@@ -937,7 +1144,7 @@ impl Backend for CpuBackend {
             return Ok(out);
         } else if current_dtype == DType::F32 && target_dtype == DType::I32 {
             let in_f32 = storage.as_slice::<f32>();
-            let mut out = CpuByteStorage::new(storage.len() * 4, storage.len(), 4);
+            let mut out = CpuByteStorage::new(storage.len() * 4, storage.len(), 4)?;
             let out_i32 = out.as_mut_slice::<i32>();
             for (i, &val) in in_f32.iter().enumerate() {
                 out_i32[i] = val as i32;
@@ -1099,7 +1306,7 @@ impl Backend for CpuBackend {
             )));
         }
         let mut storage =
-            CpuByteStorage::new(expected_len, shape.num_elements(), dtype.element_size());
+            CpuByteStorage::new(expected_len, shape.num_elements(), dtype.element_size())?;
         storage.as_mut_bytes().copy_from_slice(bytes);
         Ok(storage)
     }
@@ -1110,6 +1317,11 @@ impl Backend for CpuBackend {
     }
 
     fn has_nan_or_inf(&self, storage: &Self::Storage, dtype: DType) -> Result<bool> {
+        if dtype == DType::F16 || dtype == DType::BF16 {
+            let shape = Shape::new(vec![storage.len()]);
+            let f32_storage = self.cast(storage, &shape, dtype, DType::F32)?;
+            return self.has_nan_or_inf(&f32_storage, DType::F32);
+        }
         dispatch_float!(dtype, T, {
             let slice = storage.as_slice::<T>();
             for &val in slice {
@@ -1162,7 +1374,7 @@ impl Backend for CpuBackend {
                 out_shape.num_elements() * std::mem::size_of::<T>(),
                 out_shape.num_elements(),
                 std::mem::size_of::<T>(),
-            );
+            )?;
             out_storage.as_mut_slice::<T>().copy_from_slice(&out_data);
             Ok(out_storage)
         })
@@ -1214,7 +1426,7 @@ impl Backend for CpuBackend {
                 in_shape.num_elements() * std::mem::size_of::<T>(),
                 in_shape.num_elements(),
                 std::mem::size_of::<T>(),
-            );
+            )?;
             grad_in_storage
                 .as_mut_slice::<T>()
                 .copy_from_slice(&grad_in);

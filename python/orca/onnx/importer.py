@@ -93,10 +93,11 @@ class ONNXInterpreter(nn.Module):
             elif op_type == 'ReduceSum':
                 res = inputs[0].sum_to_shape([1])
             else:
-                # Fallback to identity or throw if critical
-                print(f"Warning: unsupported ONNX op '{op_type}' fallback to identity")
-                res = inputs[0]
-                
+                node_name = node.get("module_name") or (outputs[0] if outputs else "<unknown>")
+                raise NotImplementedError(
+                    f"Unsupported ONNX op '{op_type}' in imported graph node '{node_name}'"
+                )
+
             values[outputs[0]] = res
             
         return values[self.graph_output_name]

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 pub fn save_tensors<B: Backend>(tensors: &HashMap<String, Tensor<B>>, path: &str) -> Result<()> {
     let mut buffers: Vec<Vec<u8>> = Vec::new();
 
-    for (_, t) in tensors {
+    for t in tensors.values() {
         let byte_data = t.to_bytes()?;
         buffers.push(byte_data);
     }
@@ -18,15 +18,12 @@ pub fn save_tensors<B: Backend>(tensors: &HashMap<String, Tensor<B>>, path: &str
         let safe_dtype = match t.dtype() {
             DType::F32 => SafeDtype::F32,
             DType::F64 => SafeDtype::F64,
+            DType::F16 => SafeDtype::F16,
+            DType::BF16 => SafeDtype::BF16,
             DType::I32 => SafeDtype::I32,
             DType::I64 => SafeDtype::I64,
             DType::U8 => SafeDtype::U8,
             DType::Bool => SafeDtype::BOOL,
-            _ => {
-                return Err(OrcaError::InternalError(
-                    "Unsupported tensor dtype for safetensors".into(),
-                ))
-            }
         };
 
         let view = TensorView::new(safe_dtype, shape, &buffers[i])
@@ -49,11 +46,18 @@ pub fn load_tensors<B: Backend>(backend: B, path: &str) -> Result<HashMap<String
 
     let mut tensors = HashMap::new();
     for name in safe.names() {
-        let view = safe.tensor(name).unwrap();
+        let view = safe.tensor(name).map_err(|e| {
+            OrcaError::InternalError(format!(
+                "Failed to retrieve tensor view for {}: {:?}",
+                name, e
+            ))
+        })?;
 
         let dtype = match view.dtype() {
             SafeDtype::F32 => DType::F32,
             SafeDtype::F64 => DType::F64,
+            SafeDtype::F16 => DType::F16,
+            SafeDtype::BF16 => DType::BF16,
             SafeDtype::I32 => DType::I32,
             SafeDtype::I64 => DType::I64,
             SafeDtype::U8 => DType::U8,

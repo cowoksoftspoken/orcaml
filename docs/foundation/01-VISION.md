@@ -145,9 +145,9 @@ There is no monolithic core. There is no god object.
 
 You can use:
 - `orca-tensor` without `orca-autograd` (for numerical computing)
-- `orca-autograd` without `orca-nn` (for custom gradient computations)
-- `orca-nn` without `orca-data` (if you have your own data pipeline)
-- `orca-serialize` without `orca-nn` (for custom serialization needs)
+- `orca-autograd` without `orca-python` (for custom gradient computations in Rust)
+- `python/orca/nn` without `python/orca/data` (if you have your own data pipeline)
+- `orca-serialize` without `python/orca/nn` (for custom serialization needs)
 
 This modularity is enforced at the crate level in Rust. Circular
 dependencies between crates are a hard compilation error, not a style

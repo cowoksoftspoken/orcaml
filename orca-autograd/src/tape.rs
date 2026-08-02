@@ -62,6 +62,7 @@ pub struct Tape<B: Backend> {
     nodes: Vec<Box<dyn BackwardOp<B>>>,
     next_id: usize,
     grads: Gradients<B>,
+    enabled: bool,
 }
 
 impl<B: Backend> Default for Tape<B> {
@@ -76,7 +77,16 @@ impl<B: Backend> Tape<B> {
             nodes: Vec::new(),
             next_id: 0,
             grads: Gradients::new(),
+            enabled: true,
         }
+    }
+
+    pub fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
     }
 
     pub fn push_node(&mut self, op: Box<dyn BackwardOp<B>>) {

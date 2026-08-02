@@ -1,10 +1,13 @@
 import math
+from .optimizer import _validate_non_negative_float, _validate_positive_int
 
 class LRScheduler:
     """
     Base class for learning rate schedulers.
     """
     def __init__(self, optimizer):
+        if not hasattr(optimizer, "lr"):
+            raise TypeError("optimizer must expose an lr attribute")
         self.optimizer = optimizer
         self.base_lr = optimizer.lr
         self.last_epoch = 0
@@ -19,8 +22,8 @@ class LRScheduler:
 
 class StepLR(LRScheduler):
     def __init__(self, optimizer, step_size, gamma=0.1):
-        self.step_size = step_size
-        self.gamma = gamma
+        self.step_size = _validate_positive_int("step_size", step_size)
+        self.gamma = _validate_non_negative_float("gamma", gamma)
         super().__init__(optimizer)
 
     def get_lr(self):
@@ -28,8 +31,8 @@ class StepLR(LRScheduler):
 
 class CosineAnnealingLR(LRScheduler):
     def __init__(self, optimizer, T_max, eta_min=0.0):
-        self.T_max = T_max
-        self.eta_min = eta_min
+        self.T_max = _validate_positive_int("T_max", T_max)
+        self.eta_min = _validate_non_negative_float("eta_min", eta_min)
         super().__init__(optimizer)
 
     def get_lr(self):
@@ -40,7 +43,7 @@ class CosineAnnealingLR(LRScheduler):
 
 class LinearWarmup(LRScheduler):
     def __init__(self, optimizer, warmup_epochs):
-        self.warmup_epochs = warmup_epochs
+        self.warmup_epochs = _validate_positive_int("warmup_epochs", warmup_epochs)
         super().__init__(optimizer)
         
     def get_lr(self):

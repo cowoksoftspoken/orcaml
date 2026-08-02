@@ -19,6 +19,13 @@ pub enum OrcaError {
         dtype: crate::DType,
     },
 
+    #[error("Type mismatch during {op}: expected {expected:?}, got {got:?}")]
+    DTypeMismatch {
+        op: &'static str,
+        expected: crate::DType,
+        got: crate::DType,
+    },
+
     #[error("Internal error: {0}")]
     InternalError(String),
 }

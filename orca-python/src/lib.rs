@@ -20,11 +20,16 @@ fn global_backend_cpu() -> Autodiff<CpuBackend> {
     BACKEND.get_or_init(|| Autodiff::new(CpuBackend)).clone()
 }
 
-fn global_backend_gpu() -> Autodiff<GpuBackend> {
-    static BACKEND: OnceLock<Autodiff<GpuBackend>> = OnceLock::new();
-    BACKEND
-        .get_or_init(|| Autodiff::new(GpuBackend::default()))
-        .clone()
+fn global_backend_gpu() -> PyResult<Autodiff<GpuBackend>> {
+    static BACKEND: OnceLock<Result<Autodiff<GpuBackend>, String>> = OnceLock::new();
+    match BACKEND.get_or_init(|| {
+        GpuBackend::new()
+            .map(Autodiff::new)
+            .map_err(|err| err.to_string())
+    }) {
+        Ok(backend) => Ok(backend.clone()),
+        Err(message) => Err(PyRuntimeError::new_err(message.clone())),
+    }
 }
 
 #[derive(Clone)]
@@ -56,6 +61,16 @@ impl PyDType {
     const UINT8: PyDType = PyDType(DType::U8);
     #[classattr]
     const BOOL: PyDType = PyDType(DType::Bool);
+
+    fn __richcmp__(&self, other: &Self, op: pyo3::pyclass::CompareOp) -> PyResult<bool> {
+        match op {
+            pyo3::pyclass::CompareOp::Eq => Ok(self.0 == other.0),
+            pyo3::pyclass::CompareOp::Ne => Ok(self.0 != other.0),
+            _ => Err(pyo3::exceptions::PyTypeError::new_err(
+                "Only Eq and Ne are supported",
+            )),
+        }
+    }
 
     fn __repr__(&self) -> String {
         format!("orca.{}", self.0)
@@ -152,7 +167,7 @@ impl PyTensor {
         };
 
         if is_gpu {
-            let mut tensor = Tensor::zeros(global_backend_gpu(), shape, dtype)
+            let mut tensor = Tensor::zeros(global_backend_gpu()?, shape, dtype)
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
             if requires_grad {
                 tensor.require_grad();
@@ -183,7 +198,7 @@ impl PyTensor {
         };
 
         if is_gpu {
-            let mut tensor = Tensor::ones(global_backend_gpu(), shape, dtype)
+            let mut tensor = Tensor::ones(global_backend_gpu()?, shape, dtype)
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
             if requires_grad {
                 tensor.require_grad();
@@ -214,7 +229,7 @@ impl PyTensor {
         };
 
         if is_gpu {
-            let mut tensor = Tensor::scalar(global_backend_gpu(), value, dtype)
+            let mut tensor = Tensor::scalar(global_backend_gpu()?, value, dtype)
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
             if requires_grad {
                 tensor.require_grad();
@@ -247,7 +262,7 @@ impl PyTensor {
         };
 
         if is_gpu {
-            let mut tensor = Tensor::randn(global_backend_gpu(), shape, mean, std, dtype)
+            let mut tensor = Tensor::randn(global_backend_gpu()?, shape, mean, std, dtype)
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
             if requires_grad {
                 tensor.require_grad();
@@ -280,7 +295,7 @@ impl PyTensor {
         };
 
         if is_gpu {
-            let mut tensor = Tensor::rand_uniform(global_backend_gpu(), shape, low, high, dtype)
+            let mut tensor = Tensor::rand_uniform(global_backend_gpu()?, shape, low, high, dtype)
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
             if requires_grad {
                 tensor.require_grad();
@@ -311,7 +326,7 @@ impl PyTensor {
         };
 
         if is_gpu {
-            let tensor = Tensor::rand_dropout_mask(global_backend_gpu(), shape, p, dtype)
+            let tensor = Tensor::rand_dropout_mask(global_backend_gpu()?, shape, p, dtype)
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
             Ok(Self(PyTensorInner::Gpu(tensor)))
         } else {
@@ -389,7 +404,7 @@ impl PyTensor {
         };
 
         if is_gpu {
-            let mut tensor = Tensor::from_f32_slice(global_backend_gpu(), &data, shape)
+            let mut tensor = Tensor::from_f32_slice(global_backend_gpu()?, &data, shape)
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
             if requires_grad {
                 tensor.require_grad();
@@ -450,12 +465,31 @@ impl PyTensor {
     }
 
     fn to_list(&self) -> PyResult<Vec<f32>> {
-        dispatch_val!(
-            self,
-            t,
-            t.to_f32_vec()
-                .map_err(|e| PyValueError::new_err(e.to_string()))
-        )
+        let res = match &self.0 {
+            PyTensorInner::Cpu(t) => {
+                let f32_t = if t.dtype() != DType::F32 {
+                    t.to_dtype(DType::F32)
+                        .map_err(|e| PyValueError::new_err(e.to_string()))?
+                } else {
+                    t.clone()
+                };
+                f32_t
+                    .to_f32_vec()
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?
+            }
+            PyTensorInner::Gpu(t) => {
+                let f32_t = if t.dtype() != DType::F32 {
+                    t.to_dtype(DType::F32)
+                        .map_err(|e| PyValueError::new_err(e.to_string()))?
+                } else {
+                    t.clone()
+                };
+                f32_t
+                    .to_f32_vec()
+                    .map_err(|e| PyValueError::new_err(e.to_string()))?
+            }
+        };
+        Ok(res)
     }
 
     fn resolve_operand(&self, other: Operand) -> PyResult<PyTensor> {
@@ -463,7 +497,7 @@ impl PyTensor {
             Operand::Scalar(s) => {
                 let is_gpu = matches!(self.0, PyTensorInner::Gpu(_));
                 if is_gpu {
-                    let tensor = Tensor::scalar(global_backend_gpu(), s, self.dtype().0)
+                    let tensor = Tensor::scalar(global_backend_gpu()?, s, self.dtype().0)
                         .map_err(|e| PyValueError::new_err(e.to_string()))?;
                     Ok(PyTensor(PyTensorInner::Gpu(tensor)))
                 } else {
@@ -799,6 +833,10 @@ impl PyTensor {
         }
     }
 
+    fn to_dtype(&self, dtype: PyDType) -> PyResult<Self> {
+        dispatch_tensor!(self, t, t.to_dtype(dtype.0))
+    }
+
     fn set_grad(&self, grad: &Self) -> PyResult<()> {
         match (&self.0, &grad.0) {
             (PyTensorInner::Cpu(t), PyTensorInner::Cpu(g)) => t
@@ -812,6 +850,16 @@ impl PyTensor {
             )),
         }
     }
+}
+
+#[pyfunction]
+fn set_grad_enabled(enabled: bool) {
+    orca_autograd::set_grad_enabled(enabled);
+}
+
+#[pyfunction]
+fn is_grad_enabled() -> bool {
+    orca_autograd::is_grad_enabled()
 }
 
 #[pyfunction]
@@ -865,5 +913,7 @@ fn orca_python(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTensor>()?;
     m.add_function(wrap_pyfunction!(save_tensors, m)?)?;
     m.add_function(wrap_pyfunction!(load_tensors, m)?)?;
+    m.add_function(wrap_pyfunction!(set_grad_enabled, m)?)?;
+    m.add_function(wrap_pyfunction!(is_grad_enabled, m)?)?;
     Ok(())
 }

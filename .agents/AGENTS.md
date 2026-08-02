@@ -9,38 +9,27 @@ Welcome to the Orca project! You are an AI agent assisting the user (the "pilot"
 - Menghindari *spaghetti code* dan *circular dependencies*.
 
 ## 🏗️ Struktur Repositori
-- `orca-core/`: Mendefinisikan *traits* utama (`Backend`), `Shape`, `DType`, `Device`, dan *Error handling*.
-- `orca-tensor/`: Representasi `Tensor<B: Backend>` dan implementasi *forward-pass operations*.
-- `orca-backend-cpu/`: Implementasi referensi untuk *Backend* yang berjalan di CPU (Single-threaded).
-- `orca-autograd/`: *Reverse-mode Automatic Differentiation Engine* yang membungkus *backend* lain (`Autodiff<B>`) menggunakan *Tape-based computation graph*.
-- `orca-python/`: *Rust to Python bindings* menggunakan PyO3.
-- `python/orca/`: *Python library frontend* (implementasi OOP untuk `nn.Module`, `optim.SGD`, `data.DataLoader`).
-- `train_mnist.py`, `test_xor.py`: *Script* untuk memverifikasi fungsionalitas end-to-end (Python -> Rust -> Python).
+- `orca-core/`: Mendefinisikan `DType`, `Device`, `Shape`, dan `OrcaError`.
+- `orca-tensor/`: Representasi `Tensor<B: Backend>` dan operasi tensor dasar.
+- `orca-autograd/`: Mesin autodiff reverse-mode berbasis tape.
+- `orca-backend-cpu/`: Backend CPU referensi.
+- `orca-backend-gpu/`: Backend GPU berbasis `wgpu`.
+- `orca-distributed/`: Kolektif TCP dasar untuk `all_reduce`.
+- `orca-serialize/`: Helper serialisasi tensor.
+- `orca-python/`: Binding Rust ke Python via PyO3.
+- `python/orca/`: Frontend Python (`nn`, `optim`, `data`, `autocast`).
 
-## 🚦 Status Proyek (Completed Phases)
-✅ **Phase 1: Foundation**
-- Konfigurasi Cargo Workspace & Arsitektur dasar.
-- Implementasi `Shape`, `Tensor`, dan CPU Backend (operasi dasar primitif `add`, `mul`, `matmul`).
+## 🚦 Status Proyek
+**Current shipped surface**
+- Core tensor stack: `orca-core`, `orca-tensor`, `orca-autograd`.
+- Execution backends: `orca-backend-cpu`, `orca-backend-gpu`.
+- Python bindings: `orca-python` plus `python/orca/*`.
+- Distributed baseline: `orca-distributed` TCP `all_reduce`.
+- Mixed precision and quantization helpers are present on the Python side.
 
-✅ **Phase 2: Autograd Engine & PyO3**
-- Implementasi *Autograd Tape* dan `BackwardOp`.
-- *Python bindings* awal menggunakan Maturin.
-
-✅ **Phase 3: Broadcasting & Advanced Ops**
-- Implementasi *Broadcasting* via *explicit expand* & *sum_to_shape* untuk `BackwardOp`.
-- Tambahan ops: `reshape`, `exp`, `log`, `transpose`.
-- Sukses melatih model klasifikasi XOR sederhana (100% akurasi).
-
-✅ **Phase 4: ML Primitives & MNIST Verification**
-- Implementasi `nn.Linear`, `nn.ReLU`, `nn.Flatten`, `nn.CrossEntropyLoss`.
-- Perbaikan *bug* mematikan pada **Gradient Accumulation** (gradien ditimpa/di-*overwrite* jika dipanggil >1 kali dalam *forward pass*). *Fixed via* `accumulate_grad()` di level Backend.
-- Verifikasi *Training Loop* pada dataset scikit-learn Digits (versi kecil MNIST) berhasil menembus akurasi **~87%** dengan loss konvergen.
-
-## 🚀 Next Objective
-**Phase 5: GPU Acceleration (WGPU)**
-Fokus selanjutnya adalah menciptakan `orca-backend-gpu` menggunakan *crate* `wgpu`.
-- Memindahkan operasi numerik yang berat ke GPU *shaders*.
-- Mempertahankan kompatibilitas API sehingga *Autograd* dan *Python frontend* tidak perlu diubah secara drastis (cukup *switch backend*).
+**Roadmap**
+- Ikuti `docs/foundation/05-ROADMAP.md` untuk fase berikutnya.
+- Jangan menganggap fase roadmap sebagai sudah selesai kecuali ada bukti kode, test, dan dokumentasi yang sinkron.
 
 ## ⚠️ Rules & Coding Standards for Agents
 1. **Pahami Dulu, Eksekusi Kemudian**: Jangan hanya menjadi 'Yes-Man'. Teliti apakah instruksi *user* secara teknis solid. Berikan spekulasi, data, dan alasan teknis sebelum menulis *code*.

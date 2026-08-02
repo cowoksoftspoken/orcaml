@@ -4,6 +4,15 @@ class DType:
     """
     Data type of a Tensor (e.g., Float32, Float16).
     """
+    FLOAT32: 'DType'
+    FLOAT64: 'DType'
+    FLOAT16: 'DType'
+    BFLOAT16: 'DType'
+    INT32: 'DType'
+    INT64: 'DType'
+    UINT8: 'DType'
+    BOOL: 'DType'
+
     def __init__(self, name: str): ...
     def __str__(self) -> str: ...
 
@@ -170,6 +179,30 @@ class Tensor:
         
         Returns:
             List[float]: A 1D list containing the tensor's data.
+        """
+        ...
+
+    def to(self, device_str: str) -> 'Tensor':
+        """
+        Moves the tensor to the specified device.
+        
+        Args:
+            device_str (str): The target device name ('cpu' or 'gpu').
+            
+        Returns:
+            Tensor: A new tensor on the target device.
+        """
+        ...
+
+    def to_dtype(self, dtype: DType) -> 'Tensor':
+        """
+        Casts the tensor to the target data type.
+        
+        Args:
+            dtype (DType): The target data type.
+            
+        Returns:
+            Tensor: A new tensor with the target data type.
         """
         ...
     

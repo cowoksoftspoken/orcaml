@@ -5,6 +5,7 @@ members = [
     "orca-backend-cpu",
     "orca-autograd",
     "orca-python", "orca-backend-gpu", "orca-serialize",
+    "orca-distributed",
 ]
 resolver = "2"
 
@@ -31,3 +32,16 @@ strip = true
 
 [profile.dev]
 opt-level = 1 # Slight optimization for dev to speed up tensor ops a bit
+
+[workspace.lints.rust]
+unused-imports = "allow"
+
+[workspace.lints.clippy]
+default-constructed-unit-structs = "allow"
+needless-borrow = "allow"
+manual-div-ceil = "allow"
+new-without-default = "allow"
+unwrap-or-default = "allow"
+too-many-arguments = "allow"
+wrong-self-convention = "allow"
+for-kv-map = "allow"

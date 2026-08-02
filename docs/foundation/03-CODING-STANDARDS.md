@@ -2,7 +2,7 @@
 
 > **Status**: Active  
 > **Maintainer**: Core Team  
-> **Last updated**: 2026-07-03  
+> **Last updated**: 2026-08-02
 > **Applies to**: All code in the `orca-runtime` workspace and `orca` Python package
 
 ---
@@ -28,7 +28,7 @@ The goals are:
 
 All Rust code lives under the `orca-runtime` Cargo workspace. Each sub-crate follows
 the naming convention `orca-{name}` (e.g. `orca-tensor`, `orca-autograd`,
-`orca-backend-cuda`).
+`orca-backend-gpu`).
 
 ### 1.1  Style and Formatting
 
@@ -929,7 +929,7 @@ feat(tensor): add einsum operation
 fix(autograd): correct gradient accumulation for in-place ops
 docs(python): add migration guide from PyTorch
 ci(release): add aarch64-linux wheel build
-test(orca-backend-cuda): add multi-GPU broadcast tests
+test(orca-backend-gpu): add multi-GPU broadcast tests
 ```
 
 ### 3.2  Branch Strategy

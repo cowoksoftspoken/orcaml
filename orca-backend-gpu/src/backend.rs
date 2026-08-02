@@ -46,16 +46,11 @@ pub struct GpuBackend {
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
     pub pipelines: Arc<Pipelines>,
-}
-
-impl Default for GpuBackend {
-    fn default() -> Self {
-        Self::new()
-    }
+    pub pool: Arc<std::sync::Mutex<crate::pool::MemoryPool>>,
 }
 
 impl GpuBackend {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self> {
         pollster::block_on(async {
             let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
                 backends: wgpu::Backends::all(),
@@ -67,7 +62,9 @@ impl GpuBackend {
                     ..Default::default()
                 })
                 .await
-                .expect("Failed to find a suitable GPU adapter");
+                .ok_or_else(|| {
+                    OrcaError::InternalError("Failed to find a suitable GPU adapter".into())
+                })?;
 
             let (device, queue) = adapter
                 .request_device(
@@ -79,7 +76,9 @@ impl GpuBackend {
                     None,
                 )
                 .await
-                .expect("Failed to create GPU device");
+                .map_err(|err| {
+                    OrcaError::InternalError(format!("Failed to create GPU device: {err}"))
+                })?;
 
             // Compile Shaders
             let binary_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -201,12 +200,30 @@ impl GpuBackend {
                 max_to_shape_bw: create_pipeline(&max_to_shape_bw_shader, "max_to_shape_bw_main"),
             };
 
-            Self {
+            let pool = Arc::new(std::sync::Mutex::new(crate::pool::MemoryPool::new()));
+            Ok(Self {
                 device: Arc::new(device),
                 queue: Arc::new(queue),
                 pipelines: Arc::new(pipelines),
-            }
+                pool,
+            })
         })
+    }
+
+    /// Allocates a buffer using the caching MemoryPool.
+    pub fn allocate_buffer(
+        &self,
+        size: wgpu::BufferAddress,
+        mut usage: wgpu::BufferUsages,
+    ) -> wgpu::Buffer {
+        if usage.contains(wgpu::BufferUsages::STORAGE) {
+            usage |= wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST;
+        }
+        let mut pool = match self.pool.lock() {
+            Ok(pool) => pool,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        pool.allocate(&self.device, size, usage)
     }
 
     fn execute_unary(
@@ -216,14 +233,10 @@ impl GpuBackend {
         shape: &Shape,
     ) -> Result<GpuStorage> {
         let num_elements = storage.num_elements;
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: (num_elements * storage.element_size) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(
+            (num_elements * storage.element_size) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         let bind_group_layout = pipeline.get_bind_group_layout(0);
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -232,7 +245,7 @@ impl GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: storage.buffer().as_entire_binding(),
+                    resource: storage.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -260,6 +273,7 @@ impl GpuBackend {
             out_buffer,
             num_elements,
             storage.element_size,
+            self.pool.clone(),
         ))
     }
 
@@ -278,14 +292,10 @@ impl GpuBackend {
             });
         }
         let num_elements = lhs.num_elements;
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: (num_elements * lhs.element_size) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(
+            (num_elements * lhs.element_size) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         let bind_group_layout = pipeline.get_bind_group_layout(0);
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -294,11 +304,11 @@ impl GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: lhs.buffer().as_entire_binding(),
+                    resource: lhs.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: rhs.buffer().as_entire_binding(),
+                    resource: rhs.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -322,7 +332,12 @@ impl GpuBackend {
         }
         self.queue.submit(Some(encoder.finish()));
 
-        Ok(GpuStorage::new(out_buffer, num_elements, lhs.element_size))
+        Ok(GpuStorage::new(
+            out_buffer,
+            num_elements,
+            lhs.element_size,
+            self.pool.clone(),
+        ))
     }
 }
 
@@ -345,7 +360,12 @@ impl Backend for GpuBackend {
                 | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        Ok(GpuStorage::new(buffer, num_elements, element_size))
+        Ok(GpuStorage::new(
+            buffer,
+            num_elements,
+            element_size,
+            self.pool.clone(),
+        ))
     }
 
     fn from_f32_slice(&self, shape: &Shape, data: &[f32]) -> Result<Self::Storage> {
@@ -359,7 +379,12 @@ impl Backend for GpuBackend {
                     | wgpu::BufferUsages::COPY_SRC
                     | wgpu::BufferUsages::COPY_DST,
             });
-        Ok(GpuStorage::new(buffer, shape.num_elements(), 4))
+        Ok(GpuStorage::new(
+            buffer,
+            shape.num_elements(),
+            4,
+            self.pool.clone(),
+        ))
     }
 
     fn to_f32_vec(&self, storage: &Self::Storage) -> Result<Vec<f32>> {
@@ -374,7 +399,7 @@ impl Backend for GpuBackend {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        encoder.copy_buffer_to_buffer(&storage.buffer(), 0, &staging, 0, size);
+        encoder.copy_buffer_to_buffer(storage.buffer()?, 0, &staging, 0, size);
         self.queue.submit(Some(encoder.finish()));
 
         let slice = staging.slice(..);
@@ -575,14 +600,10 @@ impl Backend for GpuBackend {
             (w_in + 2 * padding as u32 - (dilation as u32 * (k_w - 1) + 1)) / stride as u32 + 1;
 
         let num_elements = (n * c_out * h_out * w_out) as usize;
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("conv2d_out"),
-            size: (num_elements * 4) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(
+            (num_elements * 4) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         let mut uniforms = [0u32; 16];
         uniforms[0] = n;
@@ -609,8 +630,8 @@ impl Backend for GpuBackend {
             });
 
         let bias_buf = match bias {
-            Some(b) => &b.buffer(),
-            None => &input.buffer(),
+            Some(b) => b.buffer()?,
+            None => input.buffer()?,
         };
 
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -619,11 +640,11 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: input.buffer().as_entire_binding(),
+                    resource: input.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: weight.buffer().as_entire_binding(),
+                    resource: weight.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -657,7 +678,12 @@ impl Backend for GpuBackend {
             );
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(out_buffer, num_elements, 4))
+        Ok(GpuStorage::new(
+            out_buffer,
+            num_elements,
+            4,
+            self.pool.clone(),
+        ))
     }
 
     fn conv2d_backward_input(
@@ -685,14 +711,10 @@ impl Backend for GpuBackend {
             (w_in + 2 * padding as u32 - (dilation as u32 * (k_w - 1) + 1)) / stride as u32 + 1;
 
         let num_elements = in_shape.num_elements();
-        let grad_in = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("conv2d_bw_in"),
-            size: (num_elements * 4) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let grad_in = self.allocate_buffer(
+            (num_elements * 4) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         let mut encoder = self
             .device
@@ -728,11 +750,11 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: grad_out.buffer().as_entire_binding(),
+                    resource: grad_out.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: weight.buffer().as_entire_binding(),
+                    resource: weight.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -759,7 +781,7 @@ impl Backend for GpuBackend {
             );
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(grad_in, num_elements, 4))
+        Ok(GpuStorage::new(grad_in, num_elements, 4, self.pool.clone()))
     }
 
     fn conv2d_backward_weight(
@@ -785,14 +807,10 @@ impl Backend for GpuBackend {
         let w_out = (in_shape[3] + 2 * padding - dilation * (weight_shape[3] - 1) - 1) / stride + 1;
 
         let num_elements = weight_shape.num_elements();
-        let grad_weight = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("conv2d_bw_weight"),
-            size: (num_elements * 4) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let grad_weight = self.allocate_buffer(
+            (num_elements * 4) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         let mut encoder = self
             .device
@@ -828,11 +846,11 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: grad_out.buffer().as_entire_binding(),
+                    resource: grad_out.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: input.buffer().as_entire_binding(),
+                    resource: input.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -859,7 +877,12 @@ impl Backend for GpuBackend {
             );
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(grad_weight, num_elements, 4))
+        Ok(GpuStorage::new(
+            grad_weight,
+            num_elements,
+            4,
+            self.pool.clone(),
+        ))
     }
 
     fn conv2d_backward_bias(
@@ -873,14 +896,10 @@ impl Backend for GpuBackend {
         let h_out = out_shape[2] as u32;
         let w_out = out_shape[3] as u32;
 
-        let grad_bias = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("conv2d_bw_bias"),
-            size: (c_out as wgpu::BufferAddress * 4),
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let grad_bias = self.allocate_buffer(
+            c_out as wgpu::BufferAddress * 4,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         let mut encoder = self
             .device
@@ -907,11 +926,11 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: grad_out.buffer().as_entire_binding(),
+                    resource: grad_out.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: grad_out.buffer().as_entire_binding(),
+                    resource: grad_out.buffer()?.as_entire_binding(),
                 }, // dummy
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -938,7 +957,12 @@ impl Backend for GpuBackend {
             );
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(grad_bias, c_out as usize, 4))
+        Ok(GpuStorage::new(
+            grad_bias,
+            c_out as usize,
+            4,
+            self.pool.clone(),
+        ))
     }
 
     fn mul_scalar(
@@ -949,14 +973,10 @@ impl Backend for GpuBackend {
         dtype: DType,
     ) -> Result<Self::Storage> {
         let num_elements = storage.num_elements;
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: (num_elements * 4) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(
+            (num_elements * 4) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         let uniform_buf = self
             .device
@@ -973,7 +993,7 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: storage.buffer().as_entire_binding(),
+                    resource: storage.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -999,7 +1019,12 @@ impl Backend for GpuBackend {
             cpass.dispatch_workgroups(((num_elements as f32) / 64.0).ceil() as u32, 1, 1);
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(out_buffer, num_elements, 4))
+        Ok(GpuStorage::new(
+            out_buffer,
+            num_elements,
+            4,
+            self.pool.clone(),
+        ))
     }
 
     fn matmul(
@@ -1035,14 +1060,10 @@ impl Backend for GpuBackend {
         let b = batch_size as u32;
 
         let num_elements = (b * m * n) as usize;
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: (num_elements * 4) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(
+            (num_elements * 4) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         // uniforms: M, K, N, B
         let uniforms: [u32; 4] = [m, k, n, b];
@@ -1061,11 +1082,11 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: lhs.buffer().as_entire_binding(),
+                    resource: lhs.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: rhs.buffer().as_entire_binding(),
+                    resource: rhs.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -1095,7 +1116,12 @@ impl Backend for GpuBackend {
             );
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(out_buffer, num_elements, 4))
+        Ok(GpuStorage::new(
+            out_buffer,
+            num_elements,
+            4,
+            self.pool.clone(),
+        ))
     }
 
     fn reshape(
@@ -1124,14 +1150,10 @@ impl Backend for GpuBackend {
         }
 
         let num_elements = shape.num_elements();
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("transpose_out"),
-            size: (num_elements * 4) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(
+            (num_elements * 4) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         let mut out_shape_vec = shape.to_vec();
         out_shape_vec.swap(dim0, dim1);
@@ -1174,7 +1196,7 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: storage.buffer().as_entire_binding(),
+                    resource: storage.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -1201,13 +1223,18 @@ impl Backend for GpuBackend {
             let mut x = workgroups;
             let mut y = 1;
             if x > 65535 {
-                y = (workgroups + 65534) / 65535;
+                y = workgroups.div_ceil(65535);
                 x = 65535;
             }
             cpass.dispatch_workgroups(x, y, 1);
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(out_buffer, num_elements, 4))
+        Ok(GpuStorage::new(
+            out_buffer,
+            num_elements,
+            4,
+            self.pool.clone(),
+        ))
     }
 
     fn expand(
@@ -1218,14 +1245,10 @@ impl Backend for GpuBackend {
         dtype: DType,
     ) -> Result<Self::Storage> {
         let num_elements = out_shape.num_elements();
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("expand_out"),
-            size: (num_elements * 4) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(
+            (num_elements * 4) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         let rank = out_shape.rank();
         let padded_in = CpuBackend::pad_shape_left(&in_shape.0, rank);
@@ -1256,7 +1279,7 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: storage.buffer().as_entire_binding(),
+                    resource: storage.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -1282,7 +1305,12 @@ impl Backend for GpuBackend {
             cpass.dispatch_workgroups(((num_elements as f32) / 64.0).ceil() as u32, 1, 1);
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(out_buffer, num_elements, 4))
+        Ok(GpuStorage::new(
+            out_buffer,
+            num_elements,
+            4,
+            self.pool.clone(),
+        ))
     }
 
     fn sum_to_shape(
@@ -1294,14 +1322,10 @@ impl Backend for GpuBackend {
     ) -> Result<Self::Storage> {
         let num_elements = out_shape.num_elements();
 
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("reduce_out"),
-            size: (num_elements * 4) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(
+            (num_elements * 4) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         // Initialize output buffer with 0.0 (which is 0x00000000)
         let mut encoder = self
@@ -1338,7 +1362,7 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: storage.buffer().as_entire_binding(),
+                    resource: storage.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -1361,7 +1385,12 @@ impl Backend for GpuBackend {
             cpass.dispatch_workgroups(((storage.num_elements as f32) / 64.0).ceil() as u32, 1, 1);
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(out_buffer, num_elements, 4))
+        Ok(GpuStorage::new(
+            out_buffer,
+            num_elements,
+            4,
+            self.pool.clone(),
+        ))
     }
 
     // Phase 6.1 Casting
@@ -1376,15 +1405,21 @@ impl Backend for GpuBackend {
             return Ok(storage.clone());
         }
 
-        if target_dtype != DType::F32 {
-            return Err(OrcaError::UnsupportedDType {
-                op: "cast",
+        let supported = matches!(
+            (current_dtype, target_dtype),
+            (
+                DType::F32 | DType::F16 | DType::BF16,
+                DType::F32 | DType::F16 | DType::BF16
+            )
+        );
+        if supported {
+            Ok(storage.clone())
+        } else {
+            Err(OrcaError::UnsupportedDType {
+                op: "cast (gpu)",
                 dtype: target_dtype,
-            });
+            })
         }
-
-        // Since GPU is effectively float32 everywhere for now, just clone the storage.
-        Ok(storage.clone())
     }
 
     // Phase 2.1 Indexing
@@ -1402,19 +1437,12 @@ impl Backend for GpuBackend {
 
         // Output starts as a copy of the base tensor (storage)
         let out_size = (shape.num_elements() * 4) as wgpu::BufferAddress;
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("scatter_out"),
-            size: out_size,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(out_size, wgpu::BufferUsages::STORAGE);
 
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        encoder.copy_buffer_to_buffer(storage.buffer(), 0, &out_buffer, 0, out_size);
+        encoder.copy_buffer_to_buffer(storage.buffer()?, 0, &out_buffer, 0, out_size);
 
         let rank = shape.rank();
         let mut out_strides_pad = [0u32; 4];
@@ -1453,11 +1481,11 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: src.buffer().as_entire_binding(),
+                    resource: src.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: index.buffer().as_entire_binding(),
+                    resource: index.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -1480,7 +1508,12 @@ impl Backend for GpuBackend {
             cpass.dispatch_workgroups(((num_elements as f32) / 64.0).ceil() as u32, 1, 1);
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(out_buffer, shape.num_elements(), 4))
+        Ok(GpuStorage::new(
+            out_buffer,
+            shape.num_elements(),
+            4,
+            self.pool.clone(),
+        ))
     }
 
     fn gather(
@@ -1493,14 +1526,10 @@ impl Backend for GpuBackend {
         dtype: DType,
     ) -> Result<Self::Storage> {
         let num_elements = index_shape.num_elements();
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("gather_out"),
-            size: (num_elements * 4) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(
+            (num_elements * 4) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         let mut encoder = self
             .device
@@ -1543,11 +1572,11 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: storage.buffer().as_entire_binding(),
+                    resource: storage.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: index.buffer().as_entire_binding(),
+                    resource: index.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -1570,7 +1599,12 @@ impl Backend for GpuBackend {
             cpass.dispatch_workgroups(((num_elements as f32) / 64.0).ceil() as u32, 1, 1);
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(out_buffer, num_elements, 4))
+        Ok(GpuStorage::new(
+            out_buffer,
+            num_elements,
+            4,
+            self.pool.clone(),
+        ))
     }
 
     fn scatter_backward_src(
@@ -1597,20 +1631,13 @@ impl Backend for GpuBackend {
         let num_elements = index_shape.num_elements();
 
         let out_size = (shape.num_elements() * 4) as wgpu::BufferAddress;
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("scatter_bw_base_out"),
-            size: out_size,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(out_size, wgpu::BufferUsages::STORAGE);
 
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         // copy grad_out to out_buffer
-        encoder.copy_buffer_to_buffer(grad_out.buffer(), 0, &out_buffer, 0, out_size);
+        encoder.copy_buffer_to_buffer(grad_out.buffer()?, 0, &out_buffer, 0, out_size);
 
         let rank = shape.rank();
         let mut out_strides_pad = [0u32; 4];
@@ -1649,7 +1676,7 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: index.buffer().as_entire_binding(),
+                    resource: index.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -1672,7 +1699,12 @@ impl Backend for GpuBackend {
             cpass.dispatch_workgroups(((num_elements as f32) / 64.0).ceil() as u32, 1, 1);
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(out_buffer, shape.num_elements(), 4))
+        Ok(GpuStorage::new(
+            out_buffer,
+            shape.num_elements(),
+            4,
+            self.pool.clone(),
+        ))
     }
 
     fn gather_backward(
@@ -1687,14 +1719,7 @@ impl Backend for GpuBackend {
         let in_elements = shape.num_elements();
         let idx_dim_size = index_shape[dim];
         let out_size = (in_elements * 4) as wgpu::BufferAddress;
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("gather_bw_out"),
-            size: out_size,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(out_size, wgpu::BufferUsages::STORAGE);
 
         let mut encoder = self
             .device
@@ -1741,11 +1766,11 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: grad_out.buffer().as_entire_binding(),
+                    resource: grad_out.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: index.buffer().as_entire_binding(),
+                    resource: index.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -1768,7 +1793,12 @@ impl Backend for GpuBackend {
             cpass.dispatch_workgroups(((in_elements as f32) / 64.0).ceil() as u32, 1, 1);
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(out_buffer, shape.num_elements(), 4))
+        Ok(GpuStorage::new(
+            out_buffer,
+            shape.num_elements(),
+            4,
+            self.pool.clone(),
+        ))
     }
 
     // Phase 1-2 Production Hardening
@@ -1786,6 +1816,7 @@ impl Backend for GpuBackend {
             buffer,
             shape.num_elements(),
             dtype.element_size(),
+            self.pool.clone(),
         ))
     }
 
@@ -1801,7 +1832,7 @@ impl Backend for GpuBackend {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        encoder.copy_buffer_to_buffer(&storage.buffer(), 0, &staging, 0, size);
+        encoder.copy_buffer_to_buffer(storage.buffer()?, 0, &staging, 0, size);
         self.queue.submit(Some(encoder.finish()));
 
         let slice = staging.slice(..);
@@ -1827,14 +1858,7 @@ impl Backend for GpuBackend {
     fn has_nan_or_inf(&self, storage: &Self::Storage, _dtype: DType) -> Result<bool> {
         let num_elements = storage.num_elements;
 
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("has_nan_or_inf_out"),
-            size: 4,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(4, wgpu::BufferUsages::STORAGE);
 
         let mut encoder = self
             .device
@@ -1848,7 +1872,7 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: storage.buffer().as_entire_binding(),
+                    resource: storage.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -1869,7 +1893,7 @@ impl Backend for GpuBackend {
         self.queue.submit(Some(encoder.finish()));
 
         // read back the 4 bytes using to_bytes trick
-        let tmp_storage = GpuStorage::new(out_buffer, 1, 4);
+        let tmp_storage = GpuStorage::new(out_buffer, 1, 4, self.pool.clone());
         let bytes = self.to_bytes(&tmp_storage)?;
         let val = u32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
 
@@ -1885,14 +1909,10 @@ impl Backend for GpuBackend {
     ) -> Result<Self::Storage> {
         let num_elements = out_shape.num_elements();
 
-        let out_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("max_to_shape_out"),
-            size: (num_elements * 4) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let out_buffer = self.allocate_buffer(
+            (num_elements * 4) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         let rank = in_shape.rank();
         let padded_out = CpuBackend::pad_shape_left(&out_shape.0, rank);
@@ -1923,7 +1943,7 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: storage.buffer().as_entire_binding(),
+                    resource: storage.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -1949,7 +1969,12 @@ impl Backend for GpuBackend {
             cpass.dispatch_workgroups(((num_elements as f32) / 64.0).ceil() as u32, 1, 1);
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(out_buffer, num_elements, 4))
+        Ok(GpuStorage::new(
+            out_buffer,
+            num_elements,
+            4,
+            self.pool.clone(),
+        ))
     }
 
     fn max_to_shape_backward(
@@ -1963,14 +1988,10 @@ impl Backend for GpuBackend {
     ) -> Result<Self::Storage> {
         let num_elements = in_shape.num_elements();
 
-        let grad_in_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("max_to_shape_bw_in"),
-            size: (num_elements * 4) as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let grad_in_buffer = self.allocate_buffer(
+            (num_elements * 4) as wgpu::BufferAddress,
+            wgpu::BufferUsages::STORAGE,
+        );
 
         let rank = in_shape.rank();
         let padded_out = CpuBackend::pad_shape_left(&out_shape.0, rank);
@@ -2001,15 +2022,15 @@ impl Backend for GpuBackend {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: grad_out.buffer().as_entire_binding(),
+                    resource: grad_out.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: in_primal.buffer().as_entire_binding(),
+                    resource: in_primal.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: out_primal.buffer().as_entire_binding(),
+                    resource: out_primal.buffer()?.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
@@ -2039,6 +2060,11 @@ impl Backend for GpuBackend {
             );
         }
         self.queue.submit(Some(encoder.finish()));
-        Ok(GpuStorage::new(grad_in_buffer, num_elements, 4))
+        Ok(GpuStorage::new(
+            grad_in_buffer,
+            num_elements,
+            4,
+            self.pool.clone(),
+        ))
     }
 }
