@@ -2,7 +2,7 @@
 
 **"Simple by default. Powerful when needed."**
 
-Orca is a lightweight, modular, and high-performance Machine Learning framework built from the ground up. It leverages the memory safety and native execution speed of **Rust** for its core computational backend, while exposing a clean, intuitive, and PyTorch-compatible API through **Python**. 
+Orca is a lightweight, modular, and high-performance Machine Learning framework built from the ground up. It leverages the memory safety and native execution speed of **Rust** for its core computational backend, while exposing a clean, intuitive, and progressive Python API.
 
 Currently at version 0.5.0, Orca focuses on providing an extensible architecture where foundational elements like Autograd engines and mathematical primitives are completely decoupled from the physical execution layer (CPU/GPU).
 
@@ -10,7 +10,7 @@ Currently at version 0.5.0, Orca focuses on providing an extensible architecture
 
 ## Core Features
 
-- **PyTorch-like Python Frontend**: Designed for immediate familiarity. The framework implements standard abstractions such as `Tensor`, `nn.Module`, `optim.SGD`, and `DataLoader`.
+- **Progressive Python Frontend**: Simple defaults for beginners, explicit control for researchers and production engineers. The framework implements standard abstractions such as `Tensor`, `nn.Module`, `optim.SGD`, and `DataLoader`.
 - **Reverse-Mode Autograd Engine**: A robust, tape-based automatic differentiation engine written entirely in Rust, dynamically building computation graphs during the forward pass.
 - **Modular Backend Architecture**: Core ML primitives (mathematical operations, multidimensional shapes, broadcasting) are strictly decoupled from hardware backends. Backends can be swapped seamlessly without rewriting the autograd or frontend layers.
 - **Safe, Fast, and SIMD-Ready**: Built 100% in Rust with zero legacy C/C++ dependencies. The CPU backend uses custom aligned memory allocators (64-byte alignment) to ensure type-safe slice casting and future-proof AVX-512/SIMD support.
@@ -61,81 +61,88 @@ The repository is highly decoupled to prevent circular dependencies and enforce 
 
 ## Quick Start Guide
 
-The Python API provides two interface levels to construct and train networks.
+The Python API follows **simple by default, powerful when needed**. Start with high-level helpers, then drop to explicit loops when research or production constraints require control.
 
-### Standard Procedural API (Recommended)
+### Beginner Path: Fit, Evaluate, Predict, Save
 
-Orca recommends the standard procedural interface for default workflows. It provides direct, explicit control over forward execution, loss calculation, and backpropagation step execution:
+Use `orca.data.from_arrays(...)` and the high-level model lifecycle when you want the shortest path from data to a reusable checkpoint:
 
 ```python
 import orca
-from orca import Tensor
+import orca.nn as nn
+
+train_data = orca.data.from_arrays(
+    [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]],
+    [0, 1, 1, 0],
+    batch_size=4,
+    one_hot_classes=2,
+)
+
+model = nn.Sequential(
+    nn.Linear(2, 8),
+    nn.ReLU(),
+    nn.Linear(8, 2),
+)
+
+history = model.compile(
+    optimizer="sgd",
+    loss="crossentropy",
+    lr=0.1,
+    metrics=["accuracy"],
+).fit(train_data, epochs=10, verbose=1)
+
+print(history["loss"][-1])
+print(model.evaluate(train_data))
+
+predictions = model.predict([[1.0, 0.0]], batch_size=1)
+model.save("xor.safetensors")
+
+restored = nn.Sequential(nn.Linear(2, 8), nn.ReLU(), nn.Linear(8, 2))
+restored.load("xor.safetensors")
+print(restored.predict([[1.0, 0.0]], batch_size=1).to_list())
+```
+
+For durable metrics, pass `callbacks=[orca.callbacks.CSVLogger("metrics.csv")]`
+to `fit(...)` without changing the training loop.
+
+### Advanced Path: Custom Training Loop
+
+Use `ArrayDataset`, `DataLoader`, explicit optimizers, dtype, and device controls when you need a research or production loop:
+
+```python
+import orca
 import orca.nn as nn
 import orca.optim as optim
 
-# 1. Define the Model Architecture
-model = nn.Sequential(
-    nn.Flatten(),
-    nn.Linear(64, 32),
-    nn.ReLU(),
-    nn.Linear(32, 10)
+dataset = orca.data.ArrayDataset(
+    [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]],
+    [0, 1, 1, 0],
+    one_hot_classes=2,
+)
+loader = orca.data.DataLoader(
+    dataset,
+    batch_size=2,
+    shuffle=True,
+    seed=42,
+    dtype=orca.DType.FLOAT32,
+    num_workers=2,
+    prefetch_factor=2,
 )
 
-# 2. Define Loss Function and Optimizer
+model = nn.Sequential(nn.Linear(2, 8), nn.ReLU(), nn.Linear(8, 2))
 loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.SGD(model.parameters(), lr=0.01)
+optimizer = optim.AdamW(model.parameters(), lr=0.01, weight_decay=0.01)
 
-# 3. Create Dummy Data
-dummy_input = orca.randn([32, 64], requires_grad=False)
-dummy_target = orca.zeros([32, 10], requires_grad=False) # Labels representation
-
-# 4. Forward Pass
-predictions = model(dummy_input)
-loss = loss_fn(predictions, dummy_target)
-
-# 5. Backward Pass and Optimization
-optimizer.zero_grad()
-loss.backward()
-optimizer.step()
-
-print(f"Training Step Completed. Loss: {loss.to_list()}")
+for inputs, targets in loader:
+    optimizer.zero_grad()
+    predictions = model(inputs)
+    loss = loss_fn(predictions, targets)
+    loss.backward()
+    optimizer.step()
 ```
 
-### Advanced Orchestration API
-
-For specialized pipelines requiring managed lifecycles, Orca offers an advanced `nn.Model` abstraction that encapsulates model compilation states, automated validation steps, metric logging, and model fitting loops.
-
-```python
-import orca
-import orca.nn as nn
-
-# 1. Define the Model subclassing nn.Model
-class MyModel(nn.Model):
-    def __init__(self):
-        super().__init__()
-        self.flatten = nn.Flatten()
-        self.fc1 = nn.Linear(64, 32)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(32, 10)
-
-    def forward(self, x):
-        x = self.flatten(x)
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        return x
-
-# 2. Instantiate and Compile Model
-model = MyModel()
-model.compile(optimizer='adam', loss='crossentropy', metrics=['accuracy'])
-
-# 3. Create Dummy Data
-dummy_input = orca.randn([32, 64])
-dummy_target = orca.zeros([32, 10])
-
-# 4. Train Model using High-Level fit API
-model.fit(dummy_input, dummy_target, epochs=5)
-```
+Use `num_workers=0` for fully synchronous loading. Increase `num_workers` and
+`prefetch_factor` for I/O-bound datasets while keeping batch order deterministic.
 
 ---
 

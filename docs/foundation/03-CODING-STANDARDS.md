@@ -701,6 +701,26 @@ force-sort-within-sections = true
 The Python API should feel native to Python users, following the conventions
 of **NumPy** and **PyTorch** where appropriate.
 
+The public API follows **simple by default, powerful when needed**:
+
+| User Need | API Shape |
+|-----------|-----------|
+| Beginner / quick experiment | One high-level lifecycle with safe defaults, e.g. `model.compile(...)`, `model.fit(...)`, `model.evaluate(...)` |
+| Standard training | Configurable objects with explicit names, e.g. `DataLoader(..., batch_size=32, shuffle=True)` |
+| Research | Custom loops using `Tensor`, `Module`, loss functions, and optimizer steps directly |
+| Production | Explicit dtype, device, seed, parallel `DataLoader` prefetch, `predict(input_count=...)`, callbacks, serialization, and distributed controls |
+
+High-level helpers must not hide irreversible behavior. Defaults may reduce
+boilerplate, but advanced controls must remain explicit keyword arguments and
+silent fallback is forbidden.
+The high-level model lifecycle must expose `fit`, `evaluate`, `predict`, `save`,
+and `load` with deterministic mode restoration around evaluation and inference.
+Training helpers must be silent by default, support `verbose=1` console telemetry,
+and accept callback hooks for durable logging or controlled early stopping.
+Data loading must stay synchronous by default. Parallel loading must preserve
+batch order, bound queued work, propagate dataset errors, and keep tensor
+collation on the caller thread.
+
 | Principle | Convention |
 |-----------|-----------|
 | Functions / methods | `snake_case` — `orca.zeros()`, `tensor.reshape()` |
@@ -1097,6 +1117,7 @@ your review comment and check off each item.
 ### API Design
 
 - [ ] Public API follows naming conventions (§1.2, §2.2).
+- [ ] Beginner defaults are available without blocking advanced explicit control.
 - [ ] New public types/functions have doc comments with examples.
 - [ ] Breaking changes are documented and justified.
 - [ ] Python bindings expose a Pythonic API (properties, dunder methods).
