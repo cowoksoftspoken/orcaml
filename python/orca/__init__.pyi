@@ -4,6 +4,7 @@ from .autocast import autocast, GradScaler
 from . import nn
 from . import optim
 from . import data
+from . import callbacks
 from . import distributed
 from . import onnx
 from . import zoo
@@ -32,7 +33,7 @@ class no_grad:
 __version__: str
 __all__ = [
     "Tensor", "DType", "Device", "save_tensors", "load_tensors", "einsum", 
-    "autocast", "GradScaler", "nn", "optim", "data", "onnx", "zoo", "hf",
+    "autocast", "GradScaler", "nn", "optim", "data", "callbacks", "onnx", "zoo", "hf",
     "distributed", "zeros", "ones", "scalar", "randn", "rand_uniform",
     "rand_dropout_mask", "from_list", "no_grad", "set_grad_enabled", "is_grad_enabled"
 ]

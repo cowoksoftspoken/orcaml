@@ -1,8 +1,10 @@
 import pytest
+import socket
+import struct
 import orca
 import orca.nn as nn
 import orca.optim as optim
-from orca.distributed import DistributedDataParallel
+from orca.distributed import DistributedDataParallel, _recv_exact, _recv_gradient
 from orca.autocast import autocast, GradScaler
 
 def test_autocast_context():
@@ -54,6 +56,56 @@ def test_factory_functions_preserve_requested_dtype():
         assert orca.Tensor.scalar(1.0, dtype=dtype).dtype == dtype
         assert orca.Tensor.randn([2], dtype=dtype).dtype == dtype
 
+
+def test_ddp_rejects_invalid_configuration():
+    model = nn.Linear(1, 1)
+
+    with pytest.raises(ValueError, match="world_size must be positive"):
+        DistributedDataParallel(model, rank=0, world_size=0)
+
+    with pytest.raises(ValueError, match=r"rank must be in \[0, 1\)"):
+        DistributedDataParallel(model, rank=1, world_size=1)
+
+    with pytest.raises(ValueError, match="master_addr must use"):
+        DistributedDataParallel(model, master_addr="127.0.0.1")
+
+    with pytest.raises(ValueError, match="timeout must be positive"):
+        DistributedDataParallel(model, timeout=0.0)
+
+
+@pytest.mark.skipif(
+    not hasattr(socket, "socketpair"),
+    reason="socketpair is required for local protocol tests",
+)
+def test_ddp_recv_exact_rejects_short_frames():
+    receiver, sender = socket.socketpair()
+    try:
+        sender.sendall(b"abc")
+        sender.close()
+
+        with pytest.raises(RuntimeError, match="closed connection"):
+            _recv_exact(receiver, 4)
+    finally:
+        receiver.close()
+
+
+@pytest.mark.skipif(
+    not hasattr(socket, "socketpair"),
+    reason="socketpair is required for local protocol tests",
+)
+def test_ddp_rejects_gradient_size_mismatch():
+    receiver, sender = socket.socketpair()
+    try:
+        sender.sendall(struct.pack("!Q", 2))
+        sender.sendall(struct.pack("!2f", 1.0, 2.0))
+
+        with pytest.raises(RuntimeError, match="expected 3 elements, got 2"):
+            _recv_gradient(receiver, expected_elements=3)
+    finally:
+        receiver.close()
+        sender.close()
+
+
 def run_ddp_worker(rank, world_size, master_addr, x_data, result_queue):
     import orca
     import orca.nn as nn
@@ -70,10 +122,12 @@ def run_ddp_worker(rank, world_size, master_addr, x_data, result_queue):
     loss.backward()
     
     grads_before = [p.tensor.grad().to_list() for p in ddp_model.parameters() if p.tensor.grad() is not None]
-    ddp_model.all_reduce_gradients()
-    grads_after = [p.tensor.grad().to_list() for p in ddp_model.parameters() if p.tensor.grad() is not None]
-    
-    result_queue.put((rank, grads_before, grads_after))
+    try:
+        ddp_model.all_reduce_gradients()
+        grads_after = [p.tensor.grad().to_list() for p in ddp_model.parameters() if p.tensor.grad() is not None]
+        result_queue.put((rank, grads_before, grads_after))
+    finally:
+        ddp_model.close()
 
 def test_ddp():
     import multiprocessing
